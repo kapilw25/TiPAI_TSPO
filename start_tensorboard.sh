@@ -16,5 +16,5 @@
 # This will show ALL runs: SFT_Baseline, SFT_GRIT, DPO_Baseline, CITA_Baseline
 # ============================================================================
 
-source venv_aqi/bin/activate
+source venv_TiPAI/bin/activate
 tensorboard --logdir=/home/ubuntu/DiskUsEast1/finetuning_evaluation/tensorboard_logs/ --port 6006
