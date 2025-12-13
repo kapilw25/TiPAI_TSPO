@@ -11,9 +11,9 @@ python -m venv venv_tipai
 source venv_tipai/bin/activate
 pip install -r requirements.txt
 
-# 2. Generate images (SDXL on A10-24GB, FLUX on A6000-48GB+)
-python -u src/m01_generate_images.py --model sdxl 2>&1 | tee logs/m01_sdxl_$(date +%Y%m%d_%H%M%S).log
-python -u src/m01_generate_images.py --model flux --push-hf 2>&1 | tee logs/m01_flux_$(date +%Y%m%d_%H%M%S).log
+# 2. Generate images (SDXL+refiner on A10-24GB, FLUX on A6000-48GB+)
+python -u src/m01_generate_images.py --model sdxl --refiner 2>&1 | tee logs/m01_sdxl_refiner_$(date +%Y%m%d_%H%M%S).log
+# python -u src/m01_generate_images.py --model flux --push-hf 2>&1 | tee logs/m01_flux_$(date +%Y%m%d_%H%M%S).log
 
 # 3. Extract 3 signals (SAM + Grad-CAM + Gaps)
 python -u src/m02_extract_signals.py 2>&1 | tee logs/m02_$(date +%Y%m%d_%H%M%S).log

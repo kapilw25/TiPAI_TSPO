@@ -5,15 +5,16 @@ Output: 20 base prompts × 4 variations × 1 seed = 80 images
 
 Run:
     mkdir -p logs
-    # SDXL (default)
-    python -u src/m01_generate_images.py 2>&1 | tee logs/m01_sdxl_$(date +%Y%m%d_%H%M%S).log
-    # FLUX.1-dev (better multi-object)
+    # SDXL base only (faster, lower quality)
+    python -u src/m01_generate_images.py --model sdxl 2>&1 | tee logs/m01_sdxl_$(date +%Y%m%d_%H%M%S).log
+    # SDXL + Refiner (better quality, recommended)
+    python -u src/m01_generate_images.py --model sdxl --refiner 2>&1 | tee logs/m01_sdxl_refiner_$(date +%Y%m%d_%H%M%S).log
+    # FLUX.1-dev (best multi-object, needs A6000-48GB+)
     python -u src/m01_generate_images.py --model flux 2>&1 | tee logs/m01_flux_$(date +%Y%m%d_%H%M%S).log
-    # With HuggingFace push
-    python -u src/m01_generate_images.py --model flux --push-hf 2>&1 | tee logs/m01_flux_$(date +%Y%m%d_%H%M%S).log
 
 Models:
   - SDXL (default): stabilityai/stable-diffusion-xl-base-1.0
+  - SDXL + Refiner: base + stabilityai/stable-diffusion-xl-refiner-1.0
   - FLUX: black-forest-labs/FLUX.1-dev (better prompt following)
 
 Structure:
@@ -63,10 +64,13 @@ class Config:
     MODELS = {
         "sdxl": {
             "model_id": "stabilityai/stable-diffusion-xl-base-1.0",
+            "refiner_id": "stabilityai/stable-diffusion-xl-refiner-1.0",
             "pipeline_class": "DiffusionPipeline",
             "torch_dtype": torch.float16,
             "image_size": 512,
-            "num_inference_steps": 30,
+            "num_inference_steps": 30,          # Base only
+            "num_inference_steps_refiner": 40,  # Base + Refiner ensemble
+            "high_noise_frac": 0.8,             # 80% base, 20% refiner
             "guidance_scale": 7.5,
             "use_cpu_offload": False,
             "generator_device": "cuda",
@@ -86,6 +90,7 @@ class Config:
 
     # Active model (set via command line)
     active_model = "sdxl"
+    use_refiner = False  # --refiner flag
 
 
 # ============================================================================
@@ -197,21 +202,37 @@ def load_pipeline(config: Config):
             pipe.enable_model_cpu_offload()
         else:
             pipe = pipe.to("cuda")
+        return pipe, None  # No refiner for FLUX
+
     else:
-        # SDXL pipeline
-        pipe = DiffusionPipeline.from_pretrained(
+        # SDXL base pipeline
+        base = DiffusionPipeline.from_pretrained(
             model_id,
             torch_dtype=model_config["torch_dtype"],
             use_safetensors=True,
             variant="fp16",
-            token=hf_token,  # Optional for SDXL but good to have
+            token=hf_token,
         )
-        pipe = pipe.to("cuda")
+        base = base.to("cuda")
 
-    return pipe
+        refiner = None
+        if config.use_refiner:
+            print(f"Loading refiner: {model_config['refiner_id']}...")
+            refiner = DiffusionPipeline.from_pretrained(
+                model_config["refiner_id"],
+                text_encoder_2=base.text_encoder_2,
+                vae=base.vae,
+                torch_dtype=model_config["torch_dtype"],
+                use_safetensors=True,
+                variant="fp16",
+                token=hf_token,
+            )
+            refiner = refiner.to("cuda")
+
+        return base, refiner
 
 
-def generate_image(pipe, prompt: str, seed: int, config: Config) -> Image.Image:
+def generate_image(base, refiner, prompt: str, seed: int, config: Config) -> Image.Image:
     """Generate a single image based on active model config."""
     model_config = config.MODELS[config.active_model]
 
@@ -219,8 +240,8 @@ def generate_image(pipe, prompt: str, seed: int, config: Config) -> Image.Image:
     generator = torch.Generator(device=model_config["generator_device"]).manual_seed(seed)
 
     if config.active_model == "flux":
-        # FLUX generation
-        image = pipe(
+        # FLUX generation (no refiner)
+        image = base(
             prompt=prompt,
             height=model_config["image_size"],
             width=model_config["image_size"],
@@ -229,9 +250,39 @@ def generate_image(pipe, prompt: str, seed: int, config: Config) -> Image.Image:
             max_sequence_length=model_config["max_sequence_length"],
             generator=generator,
         ).images[0]
+
+    elif refiner is not None:
+        # SDXL base + refiner ensemble
+        n_steps = model_config["num_inference_steps_refiner"]
+        high_noise_frac = model_config["high_noise_frac"]
+
+        # Base: run first 80% of denoising
+        latent = base(
+            prompt=prompt,
+            num_inference_steps=n_steps,
+            denoising_end=high_noise_frac,
+            guidance_scale=model_config["guidance_scale"],
+            height=model_config["image_size"],
+            width=model_config["image_size"],
+            generator=generator,
+            output_type="latent",
+        ).images
+
+        # Refiner: run last 20% of denoising
+        # Need new generator with same seed for refiner
+        generator_refiner = torch.Generator(device=model_config["generator_device"]).manual_seed(seed)
+        image = refiner(
+            prompt=prompt,
+            num_inference_steps=n_steps,
+            denoising_start=high_noise_frac,
+            guidance_scale=model_config["guidance_scale"],
+            image=latent,
+            generator=generator_refiner,
+        ).images[0]
+
     else:
-        # SDXL generation
-        image = pipe(
+        # SDXL base only
+        image = base(
             prompt=prompt,
             num_inference_steps=model_config["num_inference_steps"],
             guidance_scale=model_config["guidance_scale"],
@@ -357,6 +408,11 @@ def generate_all_images(config: Config) -> None:
 
     model_config = config.MODELS[config.active_model]
     print(f"Model: {config.active_model.upper()} ({model_config['model_id']})")
+    if config.use_refiner and config.active_model == "sdxl":
+        print(f"Refiner: {model_config['refiner_id']} (80/20 ensemble)")
+        print(f"Steps: {model_config['num_inference_steps_refiner']} (base+refiner)")
+    else:
+        print(f"Steps: {model_config['num_inference_steps']}")
     print(f"Total prompts (with variations): {len(prompts)}")
     print(f"Base prompts: {len(baseline_prompts)}")
     print(f"Seed: {config.SEED}")
@@ -373,8 +429,9 @@ def generate_all_images(config: Config) -> None:
             print(f"Resuming... Will skip {len(existing)} existing images.")
 
     conn = init_database(config.DB_PATH)
-    pipe = load_pipeline(config)
-    pbar = tqdm(total=len(prompts), desc=f"Generating ({config.active_model})")
+    base, refiner = load_pipeline(config)
+    desc = f"Generating ({config.active_model}" + ("+refiner)" if refiner else ")")
+    pbar = tqdm(total=len(prompts), desc=desc)
 
     for prompt_data in prompts:
         prompt_id = prompt_data['id']
@@ -399,7 +456,7 @@ def generate_all_images(config: Config) -> None:
             continue
 
         # Generate image
-        image = generate_image(pipe, generation_prompt, config.SEED, config)
+        image = generate_image(base, refiner, generation_prompt, config.SEED, config)
 
         # Add text overlay
         image_with_text = add_text_overlay(image, baseline_prompt, generation_prompt,
@@ -427,11 +484,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="sdxl", choices=["sdxl", "flux"],
                         help="Model to use: sdxl (default) or flux")
+    parser.add_argument("--refiner", action="store_true",
+                        help="Use SDXL refiner (80/20 ensemble for better quality)")
     parser.add_argument("--push-hf", action="store_true", help="Push to HuggingFace after generation")
     args = parser.parse_args()
 
     config = Config()
     config.active_model = args.model
+    config.use_refiner = args.refiner
 
     print(f"\n{'='*60}")
     print(f"TiPAI Image Generation")
