@@ -1,27 +1,20 @@
 """
 m01_generate_images.py
-Generate images using Stable Diffusion or FLUX for each prompt variation.
+Generate images using FLUX.1-dev for each prompt variation.
 Output: 20 base prompts × 4 variations × 1 seed = 80 images
 
 Run:
     mkdir -p logs
-    # SDXL base only (faster, lower quality)
-    python -u src/m01_generate_images.py --model sdxl 2>&1 | tee logs/m01_sdxl_$(date +%Y%m%d_%H%M%S).log
-    # SDXL + Refiner (better quality, recommended)
-    python -u src/m01_generate_images.py --model sdxl --refiner 2>&1 | tee logs/m01_sdxl_refiner_$(date +%Y%m%d_%H%M%S).log
-    # FLUX.1-dev (best multi-object, needs A6000-48GB+)
-    python -u src/m01_generate_images.py --model flux 2>&1 | tee logs/m01_flux_$(date +%Y%m%d_%H%M%S).log
+    python -u src/m01_generate_images.py --push-hf 2>&1 | tee logs/m01_flux_$(date +%Y%m%d_%H%M%S).log
 
-Models:
-  - SDXL (default): stabilityai/stable-diffusion-xl-base-1.0
-  - SDXL + Refiner: base + stabilityai/stable-diffusion-xl-refiner-1.0
-  - FLUX: black-forest-labs/FLUX.1-dev (better prompt following)
+Model: black-forest-labs/FLUX.1-dev (best for multi-object prompt following)
+Requires: A6000-48GB+ GPU, HF_TOKEN in .env file
 
 Structure:
   - v0_original: Correct prompt (chosen baseline)
-  - v1_attribute: Wrong color/size/material
-  - v2_object: Swapped/wrong main object
-  - v3_spatial: Wrong spatial relation or count
+  - v1_attribute: Wrong color/attribute on ONE object
+  - v2_object: ONE object swapped for different object
+  - v3_spatial: Wrong spatial relation for ONE object
 
 Each image has text overlay showing:
   - baseline_prompt: The v0_original prompt (reference)
@@ -38,7 +31,7 @@ from pathlib import Path
 import torch
 from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
-from diffusers import DiffusionPipeline, FluxPipeline
+from diffusers import FluxPipeline
 
 
 # ============================================================================
@@ -46,12 +39,8 @@ from diffusers import DiffusionPipeline, FluxPipeline
 # ============================================================================
 class Config:
     PROJECT_ROOT = Path(__file__).parent.parent
-    # Prompts path set dynamically based on model
-    PROMPTS_SDXL = PROJECT_ROOT / "data" / "prompts_sdxl.json"
-    PROMPTS_FLUX = PROJECT_ROOT / "data" / "prompts.json"
-    # Output dirs per model (set dynamically)
-    OUTPUT_DIR_SDXL = PROJECT_ROOT / "outputs" / "m01_images_sdxl"
-    OUTPUT_DIR_FLUX = PROJECT_ROOT / "outputs" / "m01_images_flux"
+    PROMPTS_PATH = PROJECT_ROOT / "data" / "prompts.json"
+    OUTPUT_DIR = PROJECT_ROOT / "outputs" / "m01_images_flux"
     DB_PATH = PROJECT_ROOT / "outputs" / "centralized.db"
 
     SEED = 42  # Single seed for all variations
@@ -60,37 +49,13 @@ class Config:
     TEXT_HEADER_HEIGHT = 80  # Pixels for text above image
     FONT_SIZE = 12
 
-    # Model configurations
-    MODELS = {
-        "sdxl": {
-            "model_id": "stabilityai/stable-diffusion-xl-base-1.0",
-            "refiner_id": "stabilityai/stable-diffusion-xl-refiner-1.0",
-            "pipeline_class": "DiffusionPipeline",
-            "torch_dtype": torch.float16,
-            "image_size": 512,
-            "num_inference_steps": 30,          # Base only
-            "num_inference_steps_refiner": 40,  # Base + Refiner ensemble
-            "high_noise_frac": 0.8,             # 80% base, 20% refiner
-            "guidance_scale": 7.5,
-            "use_cpu_offload": False,
-            "generator_device": "cuda",
-        },
-        "flux": {
-            "model_id": "black-forest-labs/FLUX.1-dev",
-            "pipeline_class": "FluxPipeline",
-            "torch_dtype": torch.bfloat16,
-            "image_size": 512,  # Can be 1024 for higher quality
-            "num_inference_steps": 50,
-            "guidance_scale": 3.5,
-            "use_cpu_offload": True,  # FLUX needs more VRAM
-            "generator_device": "cpu",  # FLUX uses CPU generator
-            "max_sequence_length": 512,
-        },
-    }
-
-    # Active model (set via command line)
-    active_model = "sdxl"
-    use_refiner = False  # --refiner flag
+    # FLUX.1-dev configuration
+    MODEL_ID = "black-forest-labs/FLUX.1-dev"
+    TORCH_DTYPE = torch.bfloat16
+    IMAGE_SIZE = 512
+    NUM_INFERENCE_STEPS = 50
+    GUIDANCE_SCALE = 3.5
+    MAX_SEQUENCE_LENGTH = 512
 
 
 # ============================================================================
@@ -127,7 +92,7 @@ def init_database(db_path: Path) -> sqlite3.Connection:
 def save_image_record(conn: sqlite3.Connection, image_id: str, prompt_id: str,
                       base_id: str, variation: str, baseline_prompt: str,
                       generation_prompt: str, prompt_category: str,
-                      seed: int, model: str, image_path: str) -> None:
+                      seed: int, image_path: str) -> None:
     """Save image record to database."""
     cursor = conn.cursor()
     cursor.execute("""
@@ -136,7 +101,7 @@ def save_image_record(conn: sqlite3.Connection, image_id: str, prompt_id: str,
          prompt_category, seed, model, image_path)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (image_id, prompt_id, base_id, variation, baseline_prompt, generation_prompt,
-          prompt_category, seed, model, image_path))
+          prompt_category, seed, "flux", image_path))
     conn.commit()
 
 
@@ -176,120 +141,39 @@ def load_hf_token() -> str:
     return None
 
 
-def load_pipeline(config: Config):
-    """Load diffusion pipeline based on active model config."""
+def load_pipeline(config: Config) -> FluxPipeline:
+    """Load FLUX.1-dev pipeline."""
     assert torch.cuda.is_available(), "CUDA required! No CPU/MPS fallback."
 
-    model_config = config.MODELS[config.active_model]
-    model_id = model_config["model_id"]
-
-    # Load HF token for gated models
     hf_token = load_hf_token()
+    if not hf_token:
+        raise ValueError("FLUX.1-dev requires HF_TOKEN in .env file")
 
-    print(f"Loading {model_id} ({config.active_model.upper()}) on CUDA...")
+    print(f"Loading {config.MODEL_ID} on CUDA...")
 
-    if config.active_model == "flux":
-        # FLUX.1-dev pipeline (gated model - requires token)
-        if not hf_token:
-            raise ValueError("FLUX.1-dev requires HF_TOKEN in .env file")
+    pipe = FluxPipeline.from_pretrained(
+        config.MODEL_ID,
+        torch_dtype=config.TORCH_DTYPE,
+        token=hf_token,
+    )
+    pipe.enable_model_cpu_offload()
 
-        pipe = FluxPipeline.from_pretrained(
-            model_id,
-            torch_dtype=model_config["torch_dtype"],
-            token=hf_token,
-        )
-        if model_config["use_cpu_offload"]:
-            pipe.enable_model_cpu_offload()
-        else:
-            pipe = pipe.to("cuda")
-        return pipe, None  # No refiner for FLUX
-
-    else:
-        # SDXL base pipeline
-        base = DiffusionPipeline.from_pretrained(
-            model_id,
-            torch_dtype=model_config["torch_dtype"],
-            use_safetensors=True,
-            variant="fp16",
-            token=hf_token,
-        )
-        base = base.to("cuda")
-
-        refiner = None
-        if config.use_refiner:
-            print(f"Loading refiner: {model_config['refiner_id']}...")
-            refiner = DiffusionPipeline.from_pretrained(
-                model_config["refiner_id"],
-                text_encoder_2=base.text_encoder_2,
-                vae=base.vae,
-                torch_dtype=model_config["torch_dtype"],
-                use_safetensors=True,
-                variant="fp16",
-                token=hf_token,
-            )
-            refiner = refiner.to("cuda")
-
-        return base, refiner
+    return pipe
 
 
-def generate_image(base, refiner, prompt: str, seed: int, config: Config) -> Image.Image:
-    """Generate a single image based on active model config."""
-    model_config = config.MODELS[config.active_model]
+def generate_image(pipe: FluxPipeline, prompt: str, seed: int, config: Config) -> Image.Image:
+    """Generate a single image using FLUX."""
+    generator = torch.Generator(device="cpu").manual_seed(seed)
 
-    # Create generator on appropriate device
-    generator = torch.Generator(device=model_config["generator_device"]).manual_seed(seed)
-
-    if config.active_model == "flux":
-        # FLUX generation (no refiner)
-        image = base(
-            prompt=prompt,
-            height=model_config["image_size"],
-            width=model_config["image_size"],
-            guidance_scale=model_config["guidance_scale"],
-            num_inference_steps=model_config["num_inference_steps"],
-            max_sequence_length=model_config["max_sequence_length"],
-            generator=generator,
-        ).images[0]
-
-    elif refiner is not None:
-        # SDXL base + refiner ensemble
-        n_steps = model_config["num_inference_steps_refiner"]
-        high_noise_frac = model_config["high_noise_frac"]
-
-        # Base: run first 80% of denoising
-        latent = base(
-            prompt=prompt,
-            num_inference_steps=n_steps,
-            denoising_end=high_noise_frac,
-            guidance_scale=model_config["guidance_scale"],
-            height=model_config["image_size"],
-            width=model_config["image_size"],
-            generator=generator,
-            output_type="latent",
-        ).images
-
-        # Refiner: run last 20% of denoising
-        # Need new generator with same seed for refiner
-        generator_refiner = torch.Generator(device=model_config["generator_device"]).manual_seed(seed)
-        image = refiner(
-            prompt=prompt,
-            num_inference_steps=n_steps,
-            denoising_start=high_noise_frac,
-            guidance_scale=model_config["guidance_scale"],
-            image=latent,
-            generator=generator_refiner,
-        ).images[0]
-
-    else:
-        # SDXL base only
-        image = base(
-            prompt=prompt,
-            num_inference_steps=model_config["num_inference_steps"],
-            guidance_scale=model_config["guidance_scale"],
-            height=model_config["image_size"],
-            width=model_config["image_size"],
-            generator=generator,
-        ).images[0]
+    image = pipe(
+        prompt=prompt,
+        height=config.IMAGE_SIZE,
+        width=config.IMAGE_SIZE,
+        guidance_scale=config.GUIDANCE_SCALE,
+        num_inference_steps=config.NUM_INFERENCE_STEPS,
+        max_sequence_length=config.MAX_SEQUENCE_LENGTH,
+        generator=generator,
+    ).images[0]
 
     return image
 
@@ -315,10 +199,8 @@ def add_text_overlay(image: Image.Image, baseline_prompt: str, generation_prompt
     # Try to load a font, fall back to default
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", config.FONT_SIZE)
-        font_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", config.FONT_SIZE)
     except:
         font = ImageFont.load_default()
-        font_bold = font
 
     # Wrap text to fit image width
     max_chars = img_w // 6  # Approximate chars that fit
@@ -343,13 +225,13 @@ def add_text_overlay(image: Image.Image, baseline_prompt: str, generation_prompt
     return new_img
 
 
-def check_existing_images(config: Config, prompts: list, output_dir: Path) -> list:
+def check_existing_images(config: Config, prompts: list) -> list:
     """Check for existing images and return list of existing paths."""
     existing = []
     for prompt_data in prompts:
         prompt_id = prompt_data['id']
         image_id = f"{prompt_id}_seed{config.SEED}"
-        image_path = output_dir / f"{image_id}.png"
+        image_path = config.OUTPUT_DIR / f"{image_id}.png"
         if image_path.exists():
             existing.append(image_path)
     return existing
@@ -372,13 +254,13 @@ def prompt_user_for_action(existing_count: int, total_count: int) -> str:
         print("Invalid choice. Enter 1 or 2.")
 
 
-def delete_existing_images(config: Config, output_dir: Path) -> None:
+def delete_existing_images(config: Config) -> None:
     """Delete all existing images and clear DB records."""
     # Delete image files
-    if output_dir.exists():
-        for png in output_dir.glob("*.png"):
+    if config.OUTPUT_DIR.exists():
+        for png in config.OUTPUT_DIR.glob("*.png"):
             png.unlink()
-        print(f"Deleted all images from {output_dir}")
+        print(f"Deleted all images from {config.OUTPUT_DIR}")
 
     # Clear DB records
     if config.DB_PATH.exists():
@@ -390,48 +272,36 @@ def delete_existing_images(config: Config, output_dir: Path) -> None:
         print("Cleared images table in database")
 
 
-def generate_all_images(config: Config) -> None:
+def generate_all_images(config: Config) -> Path:
     """Generate all images for all prompt variations."""
-    # Select prompts and output dir based on model
-    if config.active_model == "sdxl":
-        prompts_path = config.PROMPTS_SDXL
-        output_dir = config.OUTPUT_DIR_SDXL
-    else:
-        prompts_path = config.PROMPTS_FLUX
-        output_dir = config.OUTPUT_DIR_FLUX
+    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Using prompts: {prompts_path.name}")
-    print(f"Output dir: {output_dir}")
+    print(f"Using prompts: {config.PROMPTS_PATH.name}")
+    print(f"Output dir: {config.OUTPUT_DIR}")
 
-    prompts, baseline_prompts = load_prompts(prompts_path)
+    prompts, baseline_prompts = load_prompts(config.PROMPTS_PATH)
 
-    model_config = config.MODELS[config.active_model]
-    print(f"Model: {config.active_model.upper()} ({model_config['model_id']})")
-    if config.use_refiner and config.active_model == "sdxl":
-        print(f"Refiner: {model_config['refiner_id']} (80/20 ensemble)")
-        print(f"Steps: {model_config['num_inference_steps_refiner']} (base+refiner)")
-    else:
-        print(f"Steps: {model_config['num_inference_steps']}")
+    print(f"Model: FLUX.1-dev ({config.MODEL_ID})")
+    print(f"Steps: {config.NUM_INFERENCE_STEPS}")
     print(f"Total prompts (with variations): {len(prompts)}")
     print(f"Base prompts: {len(baseline_prompts)}")
     print(f"Seed: {config.SEED}")
-    print(f"Image size: {model_config['image_size']}x{model_config['image_size']}")
+    print(f"Image size: {config.IMAGE_SIZE}x{config.IMAGE_SIZE}")
 
     # Check for existing images
-    existing = check_existing_images(config, prompts, output_dir)
+    existing = check_existing_images(config, prompts)
     if existing:
         choice = prompt_user_for_action(len(existing), len(prompts))
         if choice == '2':
-            delete_existing_images(config, output_dir)
+            delete_existing_images(config)
             print("Starting fresh generation...")
         else:
             print(f"Resuming... Will skip {len(existing)} existing images.")
 
     conn = init_database(config.DB_PATH)
-    base, refiner = load_pipeline(config)
-    desc = f"Generating ({config.active_model}" + ("+refiner)" if refiner else ")")
-    pbar = tqdm(total=len(prompts), desc=desc)
+    pipe = load_pipeline(config)
+
+    pbar = tqdm(total=len(prompts), desc="Generating (FLUX)")
 
     for prompt_data in prompts:
         prompt_id = prompt_data['id']
@@ -444,19 +314,19 @@ def generate_all_images(config: Config) -> None:
         baseline_prompt = baseline_prompts.get(base_id, generation_prompt)
 
         image_id = f"{prompt_id}_seed{config.SEED}"
-        image_path = output_dir / f"{image_id}.png"
+        image_path = config.OUTPUT_DIR / f"{image_id}.png"
 
         if image_path.exists():
             # Still save to DB if not already there
             save_image_record(conn, image_id, prompt_id, base_id, variation,
                               baseline_prompt, generation_prompt, prompt_category,
-                              config.SEED, config.active_model,
+                              config.SEED,
                               str(image_path.relative_to(config.PROJECT_ROOT)))
             pbar.update(1)
             continue
 
         # Generate image
-        image = generate_image(base, refiner, generation_prompt, config.SEED, config)
+        image = generate_image(pipe, generation_prompt, config.SEED, config)
 
         # Add text overlay
         image_with_text = add_text_overlay(image, baseline_prompt, generation_prompt,
@@ -466,14 +336,14 @@ def generate_all_images(config: Config) -> None:
         image_with_text.save(str(image_path))
         save_image_record(conn, image_id, prompt_id, base_id, variation,
                           baseline_prompt, generation_prompt, prompt_category,
-                          config.SEED, config.active_model,
+                          config.SEED,
                           str(image_path.relative_to(config.PROJECT_ROOT)))
         pbar.update(1)
 
     pbar.close()
     conn.close()
-    print(f"Done! Saved to {output_dir}")
-    return output_dir  # Return for push_hf
+    print(f"Done! Saved to {config.OUTPUT_DIR}")
+    return config.OUTPUT_DIR
 
 
 # ============================================================================
@@ -482,19 +352,13 @@ def generate_all_images(config: Config) -> None:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="sdxl", choices=["sdxl", "flux"],
-                        help="Model to use: sdxl (default) or flux")
-    parser.add_argument("--refiner", action="store_true",
-                        help="Use SDXL refiner (80/20 ensemble for better quality)")
     parser.add_argument("--push-hf", action="store_true", help="Push to HuggingFace after generation")
     args = parser.parse_args()
 
     config = Config()
-    config.active_model = args.model
-    config.use_refiner = args.refiner
 
     print(f"\n{'='*60}")
-    print(f"TiPAI Image Generation")
+    print(f"TiPAI Image Generation (FLUX.1-dev)")
     print(f"{'='*60}")
 
     output_dir = generate_all_images(config)

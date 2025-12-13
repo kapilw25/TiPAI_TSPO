@@ -18,12 +18,18 @@ Run:
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+from scipy import ndimage
 from tqdm import tqdm
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+from utils.mask_utils import decode_mask_rle
 
 
 # ============================================================================
@@ -35,8 +41,9 @@ class Config:
     # Note: image_path comes from DB (model-specific dirs handled by m01)
     OUTPUT_DIR = PROJECT_ROOT / "outputs" / "m03_risk_maps"
 
-    # Overlay config
-    OVERLAY_ALPHA = 0.7
+    # Overlay config - OUTLINE mode (preserves original colors)
+    OUTLINE_THICKNESS = 4  # Pixels for red border around bad segments
+    OUTLINE_COLOR = (255, 0, 0)  # Pure red for maximum visibility
     SCORE_THRESHOLD_RATIO = 0.92  # Mark as "bad" if score < v0_score * ratio
 
 
@@ -86,6 +93,17 @@ def get_v0_scores_by_base(conn: sqlite3.Connection) -> dict:
     return {row[0]: row[1] for row in cursor.fetchall()}
 
 
+def get_v0_images_by_base(conn: sqlite3.Connection) -> dict:
+    """Get v0_original image_path for each base_id."""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT base_id, image_path
+        FROM images
+        WHERE variation = 'v0_original'
+    """)
+    return {row[0]: row[1] for row in cursor.fetchall()}
+
+
 def save_risk_map_record(conn: sqlite3.Connection, image_id: str, risk_map_path: str,
                          num_bad: int, avg_score: float, v0_score: float) -> None:
     """Save risk map record to database."""
@@ -101,106 +119,165 @@ def save_risk_map_record(conn: sqlite3.Connection, image_id: str, risk_map_path:
 # ============================================================================
 # Risk Map Generation
 # ============================================================================
+def mask_to_outline(mask: np.ndarray, thickness: int = 4) -> np.ndarray:
+    """
+    Convert a filled mask to an outline mask.
+
+    Uses morphological erosion: outline = mask - eroded_mask
+    """
+    if not mask.any():
+        return mask
+
+    # Create structure element for erosion
+    struct = ndimage.generate_binary_structure(2, 1)
+
+    # Erode the mask by thickness iterations
+    eroded = ndimage.binary_erosion(mask, structure=struct, iterations=thickness)
+
+    # Outline = original - eroded
+    outline = mask & ~eroded
+
+    return outline
+
+
 def create_risk_overlay(
     image: Image.Image,
     objects: list,
     gaps: list,
     v0_score: float,
-    config: Config
+    config: Config,
+    text_header_height: int = 80
 ) -> tuple[Image.Image, int]:
     """
-    Create RED-only overlay on bad segments.
+    Create RED OUTLINE around bad segments (preserves original colors).
+
+    Uses outline instead of fill so the underlying object colors remain visible.
+    This is critical for v1_attribute (color changes) where we need to SEE
+    the wrong color while marking it as incorrect.
 
     Bad segments:
     1. Segments with gaps (wrong_color, missing, wrong_object)
-    2. Segments with prompt_score < v0_score * SCORE_THRESHOLD_RATIO
 
     Returns: (overlay_image, num_bad_segments)
     """
-    img_array = np.array(image).astype(np.float32)
-    h, w = img_array.shape[:2]
+    img_array = np.array(image).astype(np.uint8)
+    full_h, full_w = img_array.shape[:2]
 
-    # Track bad pixels
-    bad_mask = np.zeros((h, w), dtype=bool)
+    # Content area (excluding text header)
+    content_h = full_h - text_header_height
+
+    # Track bad pixels (filled mask first, then convert to outline)
+    bad_mask = np.zeros((full_h, full_w), dtype=bool)
     num_bad = 0
 
-    # Score threshold
-    threshold = v0_score * config.SCORE_THRESHOLD_RATIO if v0_score else 0.5
-
-    # Build set of segment_ids with gaps
+    # Build set of segment_ids with gaps (wrong_color, missing, wrong_object)
     gap_segment_ids = set()
     for gap in gaps:
         seg_id = gap.get('segment_id', -1)
         if seg_id >= 0:
             gap_segment_ids.add(seg_id)
 
-    # Check each detected object
+    # Check each detected object - ONLY mark segments with GAPS as bad
     for obj in objects:
         segment_id = obj.get('segment_id', -1)
-        prompt_score = obj.get('prompt_score', obj.get('label_score', 0.5))
-        bbox = obj.get('bbox')
+        mask_rle = obj.get('mask_rle')
 
-        if bbox is None:
+        # ONLY mark as bad if segment has a gap (wrong color, missing, wrong object)
+        is_bad = segment_id in gap_segment_ids
+
+        if not is_bad:
             continue
 
-        x, y, bw, bh = bbox
+        num_bad += 1
 
-        # Clamp bbox to image bounds
-        x1, y1 = max(0, int(x)), max(0, int(y))
-        x2, y2 = min(w, int(x + bw)), min(h, int(y + bh))
+        # Use mask if available, otherwise fall back to bbox
+        if mask_rle:
+            try:
+                # Decode mask (this is for the cropped content area)
+                segment_mask = decode_mask_rle(mask_rle)
 
-        if x2 <= x1 or y2 <= y1:
-            continue
+                # If mask covers >30% of image, it's likely inverted (background)
+                mask_coverage = segment_mask.sum() / segment_mask.size
+                if mask_coverage > 0.30:
+                    segment_mask = ~segment_mask
 
-        # Mark as bad if:
-        # 1. Has a gap (wrong color, missing, wrong object)
-        # 2. Score below threshold
-        is_bad = (segment_id in gap_segment_ids) or (prompt_score < threshold)
+                # Place mask in the correct position (after text header)
+                mask_h, mask_w = segment_mask.shape
+                if mask_h == content_h and mask_w == full_w:
+                    bad_mask[text_header_height:, :] |= segment_mask
+                else:
+                    end_y = min(text_header_height + mask_h, full_h)
+                    end_x = min(mask_w, full_w)
+                    bad_mask[text_header_height:end_y, :end_x] |= segment_mask[:end_y - text_header_height, :end_x]
+            except Exception:
+                # Fall back to bbox if mask decoding fails
+                bbox = obj.get('bbox')
+                if bbox:
+                    x, y, bw, bh = bbox
+                    x1, y1 = max(0, int(x)), max(0, int(y))
+                    x2, y2 = min(full_w, int(x + bw)), min(full_h, int(y + bh))
+                    if x2 > x1 and y2 > y1:
+                        bad_mask[y1:y2, x1:x2] = True
+        else:
+            # No mask - use bbox outline
+            bbox = obj.get('bbox')
+            if bbox:
+                x, y, bw, bh = bbox
+                x1, y1 = max(0, int(x)), max(0, int(y))
+                x2, y2 = min(full_w, int(x + bw)), min(full_h, int(y + bh))
+                if x2 > x1 and y2 > y1:
+                    bad_mask[y1:y2, x1:x2] = True
 
-        if is_bad:
-            bad_mask[y1:y2, x1:x2] = True
-            num_bad += 1
-
-    # Apply RED overlay only on bad segments
+    # Convert filled mask to OUTLINE
     result = img_array.copy()
     if bad_mask.any():
-        alpha = config.OVERLAY_ALPHA
-        red_overlay = np.array([255, 0, 0], dtype=np.float32)
-        result[bad_mask] = (1 - alpha) * result[bad_mask] + alpha * red_overlay
+        outline_mask = mask_to_outline(bad_mask, thickness=config.OUTLINE_THICKNESS)
 
-    return Image.fromarray(result.astype(np.uint8)), num_bad
+        # Apply pure red color to outline pixels only
+        result[outline_mask] = config.OUTLINE_COLOR
+
+    return Image.fromarray(result), num_bad
 
 
 def create_side_by_side(
-    image: Image.Image,
-    risk_map: Image.Image,
+    v0_image: Image.Image,
+    variation_image_with_overlay: Image.Image,
     baseline_prompt: str,
+    generation_prompt: str,
     variation: str,
-    num_bad: int,
-    avg_score: float
+    num_bad: int
 ) -> Image.Image:
-    """Create side-by-side comparison with labels."""
-    w, h = image.size
-    combined = Image.new('RGB', (w * 2 + 20, h + 60), color=(255, 255, 255))
+    """
+    Create side-by-side comparison: v0 (baseline) vs variation with RED outline.
+
+    LHS: v0 image (clean reference)
+    RHS: variation image with RED OUTLINE around different objects
+    """
+    w, h = v0_image.size
+    combined = Image.new('RGB', (w * 2 + 20, h + 80), color=(255, 255, 255))
 
     # Paste images
-    combined.paste(image, (0, 50))
-    combined.paste(risk_map, (w + 20, 50))
+    combined.paste(v0_image, (0, 70))
+    combined.paste(variation_image_with_overlay, (w + 20, 70))
 
     # Add text using matplotlib
     fig, ax = plt.subplots(figsize=(combined.width / 100, combined.height / 100), dpi=100)
     ax.imshow(combined)
     ax.axis('off')
 
-    # Title
-    bad_text = f" | {num_bad} bad segments" if num_bad > 0 else " | No issues"
-    prompt_display = baseline_prompt[:60] + '...' if len(baseline_prompt) > 60 else baseline_prompt
-    ax.text(combined.width / 2, 20, f'"{prompt_display}" (score: {avg_score:.3f}{bad_text})',
-            ha='center', va='center', fontsize=10, fontweight='bold')
+    # Title - show baseline prompt
+    prompt_display = baseline_prompt[:80] + '...' if len(baseline_prompt) > 80 else baseline_prompt
+    ax.text(combined.width / 2, 15, f'Baseline: "{prompt_display}"',
+            ha='center', va='center', fontsize=9, fontweight='bold')
+
+    # Subtitle - variation info
+    bad_text = f"{num_bad} different object(s) outlined in RED" if num_bad > 0 else "No differences"
+    ax.text(combined.width / 2, 35, f'{variation}: {bad_text}',
+            ha='center', va='center', fontsize=9, color='red' if num_bad > 0 else 'green')
 
     # Labels
-    ax.text(w / 2, 45, f'Original ({variation})', ha='center', va='center', fontsize=9)
-    ax.text(w + 20 + w / 2, 45, 'Risk Map', ha='center', va='center', fontsize=9)
+    ax.text(w / 2, 60, 'v0 (Baseline)', ha='center', va='center', fontsize=9, fontweight='bold')
+    ax.text(w + 20 + w / 2, 60, f'{variation} (RED outline = wrong)', ha='center', va='center', fontsize=9, fontweight='bold')
 
     # Convert to PIL
     fig.tight_layout(pad=0)
@@ -217,7 +294,11 @@ def create_side_by_side(
 # Main Pipeline
 # ============================================================================
 def generate_all_risk_maps(config: Config) -> None:
-    """Generate risk maps for all images with signals data."""
+    """
+    Generate risk maps for VARIATION images only.
+
+    Format: LHS = v0 (baseline), RHS = variation with RED overlay on different objects.
+    """
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(config.DB_PATH))
@@ -238,23 +319,41 @@ def generate_all_risk_maps(config: Config) -> None:
         conn.close()
         return
 
-    # Get v0 reference scores
+    # Get v0 reference scores and images
     v0_scores = get_v0_scores_by_base(conn)
+    v0_images = get_v0_images_by_base(conn)
     print(f"Loaded {len(v0_scores)} v0 reference scores")
-    print(f"Generating risk maps for {len(signals_data)} images...")
+    print(f"Loaded {len(v0_images)} v0 reference images")
 
-    for row in tqdm(signals_data, desc="Creating risk maps"):
+    # Filter to only variations (skip v0)
+    variation_data = [row for row in signals_data if row[8] != "v0_original"]
+    print(f"Generating risk maps for {len(variation_data)} variations...")
+
+    for row in tqdm(variation_data, desc="Creating risk maps"):
         (image_id, prompt, objects_json, gradcam_path, gaps_json,
          num_gaps, avg_score, image_path, variation, base_id, baseline_prompt) = row
 
-        # Load image
-        full_image_path = config.PROJECT_ROOT / image_path
-        if not full_image_path.exists():
-            print(f"Image not found: {full_image_path}")
+        # Get v0 image path for this base_id
+        v0_image_path = v0_images.get(base_id)
+        if not v0_image_path:
+            print(f"No v0 image found for base_id: {base_id}")
+            continue
+
+        # Load v0 image (LHS - baseline reference)
+        full_v0_path = config.PROJECT_ROOT / v0_image_path
+        if not full_v0_path.exists():
+            print(f"v0 image not found: {full_v0_path}")
+            continue
+
+        # Load variation image (RHS - will have RED overlay)
+        full_variation_path = config.PROJECT_ROOT / image_path
+        if not full_variation_path.exists():
+            print(f"Variation image not found: {full_variation_path}")
             continue
 
         try:
-            image = Image.open(full_image_path).convert("RGB")
+            v0_image = Image.open(full_v0_path).convert("RGB")
+            variation_image = Image.open(full_variation_path).convert("RGB")
 
             # Parse JSON data
             objects = json.loads(objects_json) if objects_json else []
@@ -263,20 +362,19 @@ def generate_all_risk_maps(config: Config) -> None:
             # Get v0 reference score for this base_id
             v0_score = v0_scores.get(base_id, avg_score or 0.5)
 
-            # For v0_original: no overlay (reference image)
-            # For variations: create risk overlay
-            if variation == "v0_original":
-                risk_map = image  # No overlay for reference
-                num_bad = 0
-            else:
-                risk_map, num_bad = create_risk_overlay(
-                    image, objects, gaps, v0_score, config
-                )
+            # Create RED overlay on variation image (segments with gaps = different from baseline)
+            variation_with_overlay, num_bad = create_risk_overlay(
+                variation_image, objects, gaps, v0_score, config
+            )
 
-            # Create side-by-side visualization
+            # Create side-by-side: LHS=v0, RHS=variation with overlay
             combined = create_side_by_side(
-                image, risk_map, baseline_prompt or prompt,
-                variation, num_bad, avg_score or 0.0
+                v0_image,
+                variation_with_overlay,
+                baseline_prompt or prompt,
+                prompt,  # generation_prompt
+                variation,
+                num_bad
             )
 
             # Save
@@ -292,6 +390,8 @@ def generate_all_risk_maps(config: Config) -> None:
 
         except Exception as e:
             print(f"Error processing {image_id}: {e}")
+            import traceback
+            traceback.print_exc()
             continue
 
     conn.close()

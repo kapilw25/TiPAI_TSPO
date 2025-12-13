@@ -311,7 +311,7 @@ def push_dataset_to_hf(db_path: Path = None, images_dir: Path = None, push_readm
     """Push dataset to HuggingFace with auto-generated README."""
     project_root = get_project_root()
     db_path = db_path or project_root / "outputs" / "centralized.db"
-    images_dir = images_dir or project_root / "outputs" / "m01_images"
+    images_dir = images_dir or project_root / "outputs" / "m01_images_flux"
 
     if not db_path.exists():
         print(f"ERROR: Database not found at {db_path}")
@@ -464,7 +464,7 @@ def push_dataset_to_hf(db_path: Path = None, images_dir: Path = None, push_readm
 def download_dataset_from_hf(output_dir: Path = None) -> bool:
     """Download dataset from HuggingFace and save locally."""
     project_root = get_project_root()
-    output_dir = output_dir or project_root / "outputs" / "m01_images"
+    output_dir = output_dir or project_root / "outputs" / "m01_images_flux"
     db_path = project_root / "outputs" / "centralized.db"
 
     print(f"Downloading from {HF_REPO}...")
@@ -541,7 +541,7 @@ def download_dataset_from_hf(output_dir: Path = None) -> bool:
 def is_dataset_available_locally(images_dir: Path = None, min_images: int = 1) -> bool:
     """Check if dataset exists locally."""
     project_root = get_project_root()
-    images_dir = images_dir or project_root / "outputs" / "m01_images"
+    images_dir = images_dir or project_root / "outputs" / "m01_images_flux"
 
     if not images_dir.exists():
         return False

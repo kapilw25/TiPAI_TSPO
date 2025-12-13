@@ -11,20 +11,26 @@ python -m venv venv_tipai
 source venv_tipai/bin/activate
 pip install -r requirements.txt
 
-# 2. Generate images (SDXL+refiner on A10-24GB, FLUX on A6000-48GB+)
-python -u src/m01_generate_images.py --model sdxl --refiner 2>&1 | tee logs/m01_sdxl_refiner_$(date +%Y%m%d_%H%M%S).log
-# python -u src/m01_generate_images.py --model flux --push-hf 2>&1 | tee logs/m01_flux_$(date +%Y%m%d_%H%M%S).log
+# 2. Create logs directory
+mkdir -p logs
 
-# 3. Extract 3 signals (SAM + Grad-CAM + Gaps)
-python -u src/m02_extract_signals.py 2>&1 | tee logs/m02_$(date +%Y%m%d_%H%M%S).log
+# 3. Generate images (SDXL on A10-24GB, FLUX on A6000-48GB+)
+python -u src/m01_generate_images.py --model sdxl 2>&1 | tee logs/m01_sdxl.log
+# python -u src/m01_generate_images.py --model flux --push-hf 2>&1 | tee logs/m01_flux.log
 
-# 4. Create risk maps (RED overlay on bad segments)
-python -u src/m03_create_risk_maps.py 2>&1 | tee logs/m03_$(date +%Y%m%d_%H%M%S).log
+# 4. Download SAM checkpoint (required for signal extraction)
+mkdir -p models && wget -O models/sam_vit_b_01ec64.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
 
-# 5. Create pairs
-python -u src/m04_create_pairs.py 2>&1 | tee logs/m04_$(date +%Y%m%d_%H%M%S).log
+# 5. Extract 3 signals (SAM + Grad-CAM + Gaps)
+python -u src/m02_extract_signals.py 2>&1 | tee logs/m02.log
 
-# 6. Launch demo
+# 6. Create risk maps (RED overlay on bad segments)
+python -u src/m03_create_risk_maps.py 2>&1 | tee logs/m03.log
+
+# 7. Create pairs
+python -u src/m04_create_pairs.py 2>&1 | tee logs/m04.log
+
+# 8. Launch demo
 python src/m08_demo_app.py --port 7860
 ```
 

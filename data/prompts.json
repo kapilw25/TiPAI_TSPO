@@ -1,15 +1,15 @@
 {
   "metadata": {
-    "description": "TiPAI-TSPO POC Dataset: 20 base prompts × 4 variations (5+ objects, 3-4 changed per variation)",
+    "description": "TiPAI-TSPO POC Dataset: 20 base prompts × 4 variations (5 objects, 1 changed per variation)",
     "variation_types": {
       "v0_original": "Correct prompt (chosen baseline)",
-      "v1_attribute": "Wrong color/attribute on 3-4 objects",
-      "v2_object": "3-4 objects swapped for different objects",
-      "v3_spatial": "Wrong spatial relations or counts for 3-4 objects"
+      "v1_attribute": "Wrong color/attribute on ONE object",
+      "v2_object": "ONE object swapped for different object",
+      "v3_spatial": "Wrong spatial relation or count for ONE object"
     },
     "total_prompts": 80,
     "seed": 42,
-    "design_note": "Each prompt has 5+ distinct objects. Variations change 3-4 objects for clear segment identification."
+    "design_note": "Each prompt has 5 distinct objects. Variations change exactly 1 object for clear segment identification."
   },
   "prompts": [
     {
@@ -24,21 +24,21 @@
       "base_id": "scene_01",
       "category": "beach_scene",
       "variation": "v1_attribute",
-      "text": "a purple sports car, orange umbrella, black surfboard, yellow beach ball, and pink palm tree on a sandy beach at sunset"
+      "text": "a purple sports car, blue umbrella, white surfboard, yellow beach ball, and green palm tree on a sandy beach at sunset"
     },
     {
       "id": "scene_01_v2",
       "base_id": "scene_01",
       "category": "beach_scene",
       "variation": "v2_object",
-      "text": "a red motorcycle, blue tent, white kayak, yellow frisbee, and green palm tree on a sandy beach at sunset"
+      "text": "a red motorcycle, blue umbrella, white surfboard, yellow beach ball, and green palm tree on a sandy beach at sunset"
     },
     {
       "id": "scene_01_v3",
       "base_id": "scene_01",
       "category": "beach_scene",
       "variation": "v3_spatial",
-      "text": "a red sports car floating in water, blue umbrella flying in sky, white surfboard buried in sand, yellow beach ball, and green cactus on a sandy beach at sunset"
+      "text": "a red sports car floating in water, blue umbrella, white surfboard, yellow beach ball, and green palm tree on a sandy beach at sunset"
     },
 
     {
@@ -53,21 +53,21 @@
       "base_id": "scene_02",
       "category": "living_room",
       "variation": "v1_attribute",
-      "text": "a black retriever, white cat, purple ball, blue food bowl, and yellow plant pot in a cozy living room"
+      "text": "a black retriever, tabby cat, red ball, blue food bowl, and green plant pot in a cozy living room"
     },
     {
       "id": "scene_02_v2",
       "base_id": "scene_02",
       "category": "living_room",
       "variation": "v2_object",
-      "text": "a golden hamster, colorful parrot, red cube, blue water fountain, and green plant pot in a cozy living room"
+      "text": "a golden hamster, tabby cat, red ball, blue food bowl, and green plant pot in a cozy living room"
     },
     {
       "id": "scene_02_v3",
       "base_id": "scene_02",
       "category": "living_room",
       "variation": "v3_spatial",
-      "text": "a golden retriever on the ceiling, tabby cat under the sofa, red ball floating, blue food bowl on wall, and green plant pot in a cozy living room"
+      "text": "a golden retriever on the ceiling, tabby cat, red ball, blue food bowl, and green plant pot in a cozy living room"
     },
 
     {
@@ -82,21 +82,21 @@
       "base_id": "scene_03",
       "category": "kitchen",
       "variation": "v1_attribute",
-      "text": "a black coffee cup, gold toaster, green apple, yellow banana, and red ceramic plate on a wooden kitchen counter"
+      "text": "a black coffee cup, silver toaster, red apple, yellow banana, and blue ceramic plate on a wooden kitchen counter"
     },
     {
       "id": "scene_03_v2",
       "base_id": "scene_03",
       "category": "kitchen",
       "variation": "v2_object",
-      "text": "a white teapot, silver blender, red tomato, yellow lemon, and blue ceramic plate on a wooden kitchen counter"
+      "text": "a white teapot, silver toaster, red apple, yellow banana, and blue ceramic plate on a wooden kitchen counter"
     },
     {
       "id": "scene_03_v3",
       "base_id": "scene_03",
       "category": "kitchen",
       "variation": "v3_spatial",
-      "text": "a white coffee cup under counter, silver toaster on floor, red apple in cup, yellow banana hanging, and blue ceramic plate on a wooden kitchen counter"
+      "text": "a white coffee cup under counter, silver toaster, red apple, yellow banana, and blue ceramic plate on a wooden kitchen counter"
     },
 
     {
@@ -111,21 +111,21 @@
       "base_id": "scene_04",
       "category": "park",
       "variation": "v1_attribute",
-      "text": "a blue bicycle, gray metal bench, black dog, green kite, and yellow traffic cone in a sunny park"
+      "text": "a blue bicycle, brown wooden bench, white dog, green kite, and orange traffic cone in a sunny park"
     },
     {
       "id": "scene_04_v2",
       "base_id": "scene_04",
       "category": "park",
       "variation": "v2_object",
-      "text": "a red scooter, brown wooden swing, white cat, green balloon, and orange traffic cone in a sunny park"
+      "text": "a red scooter, brown wooden bench, white dog, green kite, and orange traffic cone in a sunny park"
     },
     {
       "id": "scene_04_v3",
       "base_id": "scene_04",
       "category": "park",
       "variation": "v3_spatial",
-      "text": "a red bicycle in the pond, brown wooden bench upside down, white dog on bench, green kite on ground, and orange traffic cone in a sunny park"
+      "text": "a red bicycle in the pond, brown wooden bench, white dog, green kite, and orange traffic cone in a sunny park"
     },
 
     {
@@ -140,21 +140,21 @@
       "base_id": "scene_05",
       "category": "office",
       "variation": "v1_attribute",
-      "text": "a gold laptop, white keyboard, black mouse, blue coffee mug, and green succulent plant on an office desk"
+      "text": "a gold laptop, black keyboard, white mouse, red coffee mug, and green succulent plant on an office desk"
     },
     {
       "id": "scene_05_v2",
       "base_id": "scene_05",
       "category": "office",
       "variation": "v2_object",
-      "text": "a silver tablet, black game controller, white trackpad, red water bottle, and green succulent plant on an office desk"
+      "text": "a silver tablet, black keyboard, white mouse, red coffee mug, and green succulent plant on an office desk"
     },
     {
       "id": "scene_05_v3",
       "base_id": "scene_05",
       "category": "office",
       "variation": "v3_spatial",
-      "text": "a silver laptop on floor, black keyboard hanging on wall, white mouse under desk, red coffee mug, and green cactus on an office desk"
+      "text": "a silver laptop on floor, black keyboard, white mouse, red coffee mug, and green succulent plant on an office desk"
     },
 
     {
@@ -169,21 +169,21 @@
       "base_id": "scene_06",
       "category": "garden",
       "variation": "v1_attribute",
-      "text": "a pink rose bush, black iron fence, green watering can, orange butterfly, and brown bird house in a garden"
+      "text": "a pink rose bush, white picket fence, blue watering can, yellow butterfly, and brown bird house in a garden"
     },
     {
       "id": "scene_06_v2",
       "base_id": "scene_06",
       "category": "garden",
       "variation": "v2_object",
-      "text": "a red tulip bush, white picket gate, blue garden hose, yellow dragonfly, and brown squirrel feeder in a garden"
+      "text": "a red tulip bush, white picket fence, blue watering can, yellow butterfly, and brown bird house in a garden"
     },
     {
       "id": "scene_06_v3",
       "base_id": "scene_06",
       "category": "garden",
       "variation": "v3_spatial",
-      "text": "a red rose bush behind fence, white picket fence on ground, blue watering can in tree, yellow butterfly on ground, and brown bird house in a garden"
+      "text": "a red rose bush behind fence, white picket fence, blue watering can, yellow butterfly, and brown bird house in a garden"
     },
 
     {
@@ -198,21 +198,21 @@
       "base_id": "scene_07",
       "category": "classroom",
       "variation": "v1_attribute",
-      "text": "a white chalkboard, gray metal desk, green apple, orange pencil, and blue backpack in a classroom"
+      "text": "a white chalkboard, brown wooden desk, red apple, yellow pencil, and blue backpack in a classroom"
     },
     {
       "id": "scene_07_v2",
       "base_id": "scene_07",
       "category": "classroom",
       "variation": "v2_object",
-      "text": "a green whiteboard, brown wooden chair, red orange, yellow pen, and blue lunchbox in a classroom"
+      "text": "a green whiteboard, brown wooden desk, red apple, yellow pencil, and blue backpack in a classroom"
     },
     {
       "id": "scene_07_v3",
       "base_id": "scene_07",
       "category": "classroom",
       "variation": "v3_spatial",
-      "text": "a green chalkboard on floor, brown wooden desk on ceiling, red apple under desk, yellow pencil in backpack, and blue backpack in a classroom"
+      "text": "a green chalkboard on floor, brown wooden desk, red apple, yellow pencil, and blue backpack in a classroom"
     },
 
     {
@@ -227,21 +227,21 @@
       "base_id": "scene_08",
       "category": "bathroom",
       "variation": "v1_attribute",
-      "text": "a black bathtub, pink towel, orange rubber duck, purple soap bottle, and silver faucet in a modern bathroom"
+      "text": "a black bathtub, blue towel, yellow rubber duck, green soap bottle, and silver faucet in a modern bathroom"
     },
     {
       "id": "scene_08_v2",
       "base_id": "scene_08",
       "category": "bathroom",
       "variation": "v2_object",
-      "text": "a white shower, blue robe, yellow toy boat, green shampoo bottle, and silver mirror in a modern bathroom"
+      "text": "a white shower, blue towel, yellow rubber duck, green soap bottle, and silver faucet in a modern bathroom"
     },
     {
       "id": "scene_08_v3",
       "base_id": "scene_08",
       "category": "bathroom",
       "variation": "v3_spatial",
-      "text": "a white bathtub on wall, blue towel in tub, yellow rubber duck on ceiling, green soap bottle under sink, and silver faucet in a modern bathroom"
+      "text": "a white bathtub on wall, blue towel, yellow rubber duck, green soap bottle, and silver faucet in a modern bathroom"
     },
 
     {
@@ -256,21 +256,21 @@
       "base_id": "scene_09",
       "category": "dining_room",
       "variation": "v1_attribute",
-      "text": "a square glass table, four yellow chairs, black candle, green wine bottle, and orange napkins in a dining room"
+      "text": "a square glass table, four red chairs, white candle, green wine bottle, and blue napkins in a dining room"
     },
     {
       "id": "scene_09_v2",
       "base_id": "scene_09",
       "category": "dining_room",
       "variation": "v2_object",
-      "text": "a round wooden table, four red stools, white lamp, green vase, and blue tablecloth in a dining room"
+      "text": "a round wooden table, four red stools, white candle, green wine bottle, and blue napkins in a dining room"
     },
     {
       "id": "scene_09_v3",
       "base_id": "scene_09",
       "category": "dining_room",
       "variation": "v3_spatial",
-      "text": "a round wooden table, eight red chairs, white candle under table, green wine bottle floating, and blue napkins on ceiling in a dining room"
+      "text": "a round wooden table, eight red chairs, white candle, green wine bottle, and blue napkins in a dining room"
     },
 
     {
@@ -285,21 +285,21 @@
       "base_id": "scene_10",
       "category": "bedroom",
       "variation": "v1_attribute",
-      "text": "a black bed, orange pillow, purple alarm clock, white lamp, and green curtains in a cozy bedroom"
+      "text": "a black bed, blue pillow, red alarm clock, yellow lamp, and green curtains in a cozy bedroom"
     },
     {
       "id": "scene_10_v2",
       "base_id": "scene_10",
       "category": "bedroom",
       "variation": "v2_object",
-      "text": "a white hammock, blue blanket, red phone, yellow chandelier, and green blinds in a cozy bedroom"
+      "text": "a white hammock, blue pillow, red alarm clock, yellow lamp, and green curtains in a cozy bedroom"
     },
     {
       "id": "scene_10_v3",
       "base_id": "scene_10",
       "category": "bedroom",
       "variation": "v3_spatial",
-      "text": "a white bed on ceiling, blue pillow on floor, red alarm clock under bed, yellow lamp outside window, and green curtains in a cozy bedroom"
+      "text": "a white bed on ceiling, blue pillow, red alarm clock, yellow lamp, and green curtains in a cozy bedroom"
     },
 
     {
@@ -314,21 +314,21 @@
       "base_id": "scene_11",
       "category": "playground",
       "variation": "v1_attribute",
-      "text": "a purple slide, pink swing, brown sandbox, green seesaw, and white ball on a playground"
+      "text": "a purple slide, blue swing, yellow sandbox, green seesaw, and orange ball on a playground"
     },
     {
       "id": "scene_11_v2",
       "base_id": "scene_11",
       "category": "playground",
       "variation": "v2_object",
-      "text": "a red ladder, blue trapeze, yellow pool, green bench, and orange frisbee on a playground"
+      "text": "a red ladder, blue swing, yellow sandbox, green seesaw, and orange ball on a playground"
     },
     {
       "id": "scene_11_v3",
       "base_id": "scene_11",
       "category": "playground",
       "variation": "v3_spatial",
-      "text": "a red slide upside down, blue swing in sandbox, yellow sandbox on slide, green seesaw vertical, and five orange balls on a playground"
+      "text": "a red slide upside down, blue swing, yellow sandbox, green seesaw, and orange ball on a playground"
     },
 
     {
@@ -343,21 +343,21 @@
       "base_id": "scene_12",
       "category": "cafe",
       "variation": "v1_attribute",
-      "text": "a silver espresso machine, black cup, blue menu board, green plant, and pink pastry display in a cafe"
+      "text": "a silver espresso machine, white cup, red menu board, green plant, and yellow pastry display in a cafe"
     },
     {
       "id": "scene_12_v2",
       "base_id": "scene_12",
       "category": "cafe",
       "variation": "v2_object",
-      "text": "a brown cash register, white mug, red poster, green flower vase, and yellow cake stand in a cafe"
+      "text": "a brown cash register, white cup, red menu board, green plant, and yellow pastry display in a cafe"
     },
     {
       "id": "scene_12_v3",
       "base_id": "scene_12",
       "category": "cafe",
       "variation": "v3_spatial",
-      "text": "a brown espresso machine on floor, white cup on ceiling, red menu board behind counter, green plant outside, and yellow pastry display in a cafe"
+      "text": "a brown espresso machine on floor, white cup, red menu board, green plant, and yellow pastry display in a cafe"
     },
 
     {
@@ -372,21 +372,21 @@
       "base_id": "scene_13",
       "category": "gym",
       "variation": "v1_attribute",
-      "text": "a silver treadmill, green dumbbell, purple yoga mat, yellow water bottle, and pink towel in a gym"
+      "text": "a silver treadmill, red dumbbell, blue yoga mat, yellow water bottle, and white towel in a gym"
     },
     {
       "id": "scene_13_v2",
       "base_id": "scene_13",
       "category": "gym",
       "variation": "v2_object",
-      "text": "a black exercise bike, red kettlebell, blue foam roller, yellow protein shake, and white headband in a gym"
+      "text": "a black exercise bike, red dumbbell, blue yoga mat, yellow water bottle, and white towel in a gym"
     },
     {
       "id": "scene_13_v3",
       "base_id": "scene_13",
       "category": "gym",
       "variation": "v3_spatial",
-      "text": "a black treadmill on wall, red dumbbell on treadmill, blue yoga mat rolled up, yellow water bottle on mat, and white towel in a gym"
+      "text": "a black treadmill on wall, red dumbbell, blue yoga mat, yellow water bottle, and white towel in a gym"
     },
 
     {
@@ -401,21 +401,21 @@
       "base_id": "scene_14",
       "category": "library",
       "variation": "v1_attribute",
-      "text": "a black bookshelf, purple book, yellow reading lamp, green armchair, and gray coffee table in a library"
+      "text": "a black bookshelf, red book, blue reading lamp, green armchair, and white coffee table in a library"
     },
     {
       "id": "scene_14_v2",
       "base_id": "scene_14",
       "category": "library",
       "variation": "v2_object",
-      "text": "a brown magazine rack, red newspaper, blue floor lamp, green beanbag, and white side table in a library"
+      "text": "a brown magazine rack, red book, blue reading lamp, green armchair, and white coffee table in a library"
     },
     {
       "id": "scene_14_v3",
       "base_id": "scene_14",
       "category": "library",
       "variation": "v3_spatial",
-      "text": "a brown bookshelf on floor, red book floating, blue reading lamp on chair, green armchair upside down, and white coffee table in a library"
+      "text": "a brown bookshelf on floor, red book, blue reading lamp, green armchair, and white coffee table in a library"
     },
 
     {
@@ -430,21 +430,21 @@
       "base_id": "scene_15",
       "category": "farm",
       "variation": "v1_attribute",
-      "text": "a blue barn, black chicken, white horse, green tractor, and orange haystack on a farm"
+      "text": "a blue barn, white chicken, brown horse, green tractor, and yellow haystack on a farm"
     },
     {
       "id": "scene_15_v2",
       "base_id": "scene_15",
       "category": "farm",
       "variation": "v2_object",
-      "text": "a red silo, white duck, brown cow, green truck, and yellow wheat field on a farm"
+      "text": "a red silo, white chicken, brown horse, green tractor, and yellow haystack on a farm"
     },
     {
       "id": "scene_15_v3",
       "base_id": "scene_15",
       "category": "farm",
       "variation": "v3_spatial",
-      "text": "a red barn behind tractor, white chicken on roof, brown horse inside barn, green tractor in pond, and yellow haystack on a farm"
+      "text": "a red barn behind tractor, white chicken, brown horse, green tractor, and yellow haystack on a farm"
     },
 
     {
@@ -459,21 +459,21 @@
       "base_id": "scene_16",
       "category": "street",
       "variation": "v1_attribute",
-      "text": "a black taxi, silver fire hydrant, red mailbox, green street lamp, and yellow crosswalk on a city street"
+      "text": "a black taxi, red fire hydrant, blue mailbox, green street lamp, and white crosswalk on a city street"
     },
     {
       "id": "scene_16_v2",
       "base_id": "scene_16",
       "category": "street",
       "variation": "v2_object",
-      "text": "a yellow bus, red trash can, blue phone booth, green traffic light, and white zebra crossing on a city street"
+      "text": "a yellow bus, red fire hydrant, blue mailbox, green street lamp, and white crosswalk on a city street"
     },
     {
       "id": "scene_16_v3",
       "base_id": "scene_16",
       "category": "street",
       "variation": "v3_spatial",
-      "text": "a yellow taxi on sidewalk, red fire hydrant on road, blue mailbox floating, green street lamp horizontal, and white crosswalk on a city street"
+      "text": "a yellow taxi on sidewalk, red fire hydrant, blue mailbox, green street lamp, and white crosswalk on a city street"
     },
 
     {
@@ -488,21 +488,21 @@
       "base_id": "scene_17",
       "category": "campsite",
       "variation": "v1_attribute",
-      "text": "a yellow tent, gray campfire, purple cooler, green sleeping bag, and white lantern at a campsite"
+      "text": "a yellow tent, brown campfire, blue cooler, green sleeping bag, and red lantern at a campsite"
     },
     {
       "id": "scene_17_v2",
       "base_id": "scene_17",
       "category": "campsite",
       "variation": "v2_object",
-      "text": "an orange hammock, brown fire pit, blue backpack, green blanket, and red flashlight at a campsite"
+      "text": "an orange hammock, brown campfire, blue cooler, green sleeping bag, and red lantern at a campsite"
     },
     {
       "id": "scene_17_v3",
       "base_id": "scene_17",
       "category": "campsite",
       "variation": "v3_spatial",
-      "text": "an orange tent in tree, brown campfire in tent, blue cooler in fire, green sleeping bag on tree, and red lantern at a campsite"
+      "text": "an orange tent in tree, brown campfire, blue cooler, green sleeping bag, and red lantern at a campsite"
     },
 
     {
@@ -517,21 +517,21 @@
       "base_id": "scene_18",
       "category": "photo_studio",
       "variation": "v1_attribute",
-      "text": "a gold camera, green backdrop, black tripod, red chair, and yellow umbrella light in a photo studio"
+      "text": "a gold camera, white backdrop, silver tripod, red chair, and blue umbrella light in a photo studio"
     },
     {
       "id": "scene_18_v2",
       "base_id": "scene_18",
       "category": "photo_studio",
       "variation": "v2_object",
-      "text": "a black video camera, white curtain, silver light stand, red stool, and blue softbox in a photo studio"
+      "text": "a black video camera, white backdrop, silver tripod, red chair, and blue umbrella light in a photo studio"
     },
     {
       "id": "scene_18_v3",
       "base_id": "scene_18",
       "category": "photo_studio",
       "variation": "v3_spatial",
-      "text": "a black camera on floor, white backdrop folded, silver tripod horizontal, red chair upside down, and blue umbrella light in a photo studio"
+      "text": "a black camera on floor, white backdrop, silver tripod, red chair, and blue umbrella light in a photo studio"
     },
 
     {
@@ -546,21 +546,21 @@
       "base_id": "scene_19",
       "category": "outer_space",
       "variation": "v1_attribute",
-      "text": "an orange astronaut, gold spacecraft, purple planet Mars, blue Earth, and white sun in outer space"
+      "text": "an orange astronaut, silver spacecraft, red planet Mars, blue Earth, and yellow sun in outer space"
     },
     {
       "id": "scene_19_v2",
       "base_id": "scene_19",
       "category": "outer_space",
       "variation": "v2_object",
-      "text": "a white robot, silver satellite, red planet Mars, blue moon, and yellow star in outer space"
+      "text": "a white robot, silver spacecraft, red planet Mars, blue Earth, and yellow sun in outer space"
     },
     {
       "id": "scene_19_v3",
       "base_id": "scene_19",
       "category": "outer_space",
       "variation": "v3_spatial",
-      "text": "a white astronaut on Mars, silver spacecraft on Earth, red planet Mars behind sun, blue Earth, and yellow sun in outer space"
+      "text": "a white astronaut on Mars, silver spacecraft, red planet Mars, blue Earth, and yellow sun in outer space"
     },
 
     {
@@ -575,21 +575,21 @@
       "base_id": "scene_20",
       "category": "fantasy",
       "variation": "v1_attribute",
-      "text": "a blue dragon, white castle, bronze knight, red treasure chest, and yellow forest in a fantasy land"
+      "text": "a blue dragon, golden castle, silver knight, red treasure chest, and green forest in a fantasy land"
     },
     {
       "id": "scene_20_v2",
       "base_id": "scene_20",
       "category": "fantasy",
       "variation": "v2_object",
-      "text": "a purple phoenix, golden tower, silver wizard, red potion bottle, and green mountain in a fantasy land"
+      "text": "a purple phoenix, golden castle, silver knight, red treasure chest, and green forest in a fantasy land"
     },
     {
       "id": "scene_20_v3",
       "base_id": "scene_20",
       "category": "fantasy",
       "variation": "v3_spatial",
-      "text": "a purple dragon inside castle, golden castle floating, silver knight on dragon, red treasure chest in sky, and green swamp in a fantasy land"
+      "text": "a purple dragon inside castle, golden castle, silver knight, red treasure chest, and green forest in a fantasy land"
     }
   ]
 }
