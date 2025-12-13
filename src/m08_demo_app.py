@@ -1,16 +1,18 @@
 """
-m05_demo_app.py
-Gradio demo for TiPAI POC - Patch-Level Faithfulness Heatmap.
+m08_demo_app.py
+Gradio demo for TiPAI - Object-Level Faithfulness with Risk Maps.
 
 Two modes:
-1. Browse: View pre-generated pairs from database
-2. Live: Generate new images on-the-fly (requires GPU)
+1. Browse: View pre-generated pairs with risk maps from database
+2. Live: Score new images on-the-fly (requires GPU)
+
+Uses signals from m02 and risk_maps from m03.
 
 REQUIRES: CUDA GPU for live mode
 
 Run:
-    python src/m05_demo_app.py --port 7860
-    python src/m05_demo_app.py --live --port 7860
+    python -u src/m08_demo_app.py --port 7860 2>&1 | tee logs/m08_$(date +%Y%m%d_%H%M%S).log
+    python -u src/m08_demo_app.py --live --port 7860 2>&1 | tee logs/m08_$(date +%Y%m%d_%H%M%S).log
 """
 
 import json
@@ -33,13 +35,12 @@ class Config:
     PROJECT_ROOT = Path(__file__).parent.parent
     DB_PATH = PROJECT_ROOT / "outputs" / "centralized.db"
     IMAGES_DIR = PROJECT_ROOT / "outputs" / "m01_images"
-    HEATMAPS_DIR = PROJECT_ROOT / "outputs" / "m03_heatmaps"
+    RISK_MAPS_DIR = PROJECT_ROOT / "outputs" / "m03_risk_maps"
     PAIRS_DIR = PROJECT_ROOT / "outputs" / "m04_pairs"
 
     CLIP_MODEL = "ViT-L-14"
     CLIP_PRETRAINED = "openai"
-    PATCH_GRID = 7
-    OVERLAY_ALPHA = 0.5
+    OVERLAY_ALPHA = 0.7
 
 
 # ============================================================================
@@ -50,7 +51,7 @@ def get_all_pairs(config: Config) -> list:
     conn = sqlite3.connect(str(config.DB_PATH))
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT pair_id, prompt_text, chosen_image_id, rejected_image_id,
+        SELECT pair_id, chosen_prompt, chosen_image_id, rejected_image_id,
                chosen_score, rejected_score, comparison_path
         FROM pairs
         ORDER BY score_gap DESC
@@ -61,13 +62,13 @@ def get_all_pairs(config: Config) -> list:
 
 
 def get_pair_details(config: Config, pair_id: str) -> dict:
-    """Get detailed info for a specific pair."""
+    """Get detailed info for a specific pair using signals and risk_maps."""
     conn = sqlite3.connect(str(config.DB_PATH))
     cursor = conn.cursor()
 
     # Get pair info
     cursor.execute("""
-        SELECT prompt_text, chosen_image_id, rejected_image_id, chosen_score, rejected_score
+        SELECT chosen_prompt, chosen_image_id, rejected_image_id, chosen_score, rejected_score, failure_type
         FROM pairs WHERE pair_id = ?
     """, (pair_id,))
     pair = cursor.fetchone()
@@ -76,14 +77,17 @@ def get_pair_details(config: Config, pair_id: str) -> dict:
         conn.close()
         return None
 
-    prompt, chosen_id, rejected_id, chosen_score, rejected_score = pair
+    prompt, chosen_id, rejected_id, chosen_score, rejected_score, failure_type = pair
 
-    # Get patch scores
-    cursor.execute("SELECT patch_scores FROM scores WHERE image_id = ?", (chosen_id,))
-    chosen_patches = json.loads(cursor.fetchone()[0])
+    # Get signals data (num_gaps, objects)
+    cursor.execute("SELECT num_gaps, objects_json FROM signals WHERE image_id = ?", (chosen_id,))
+    chosen_sig = cursor.fetchone()
+    chosen_gaps = chosen_sig[0] if chosen_sig else 0
 
-    cursor.execute("SELECT patch_scores FROM scores WHERE image_id = ?", (rejected_id,))
-    rejected_patches = json.loads(cursor.fetchone()[0])
+    cursor.execute("SELECT num_gaps, objects_json, gaps_json FROM signals WHERE image_id = ?", (rejected_id,))
+    rejected_sig = cursor.fetchone()
+    rejected_gaps = rejected_sig[0] if rejected_sig else 0
+    rejected_gaps_json = rejected_sig[2] if rejected_sig else "[]"
 
     # Get image paths
     cursor.execute("SELECT image_path FROM images WHERE image_id = ?", (chosen_id,))
@@ -91,6 +95,15 @@ def get_pair_details(config: Config, pair_id: str) -> dict:
 
     cursor.execute("SELECT image_path FROM images WHERE image_id = ?", (rejected_id,))
     rejected_path = cursor.fetchone()[0]
+
+    # Get risk map paths
+    cursor.execute("SELECT risk_map_path FROM risk_maps WHERE image_id = ?", (chosen_id,))
+    chosen_risk_row = cursor.fetchone()
+    chosen_risk_path = chosen_risk_row[0] if chosen_risk_row else None
+
+    cursor.execute("SELECT risk_map_path FROM risk_maps WHERE image_id = ?", (rejected_id,))
+    rejected_risk_row = cursor.fetchone()
+    rejected_risk_path = rejected_risk_row[0] if rejected_risk_row else None
 
     conn.close()
 
@@ -100,18 +113,41 @@ def get_pair_details(config: Config, pair_id: str) -> dict:
         "rejected_id": rejected_id,
         "chosen_score": chosen_score,
         "rejected_score": rejected_score,
-        "chosen_patches": chosen_patches,
-        "rejected_patches": rejected_patches,
+        "failure_type": failure_type,
+        "chosen_gaps": chosen_gaps,
+        "rejected_gaps": rejected_gaps,
+        "rejected_gaps_detail": json.loads(rejected_gaps_json) if rejected_gaps_json else [],
         "chosen_path": config.PROJECT_ROOT / chosen_path,
         "rejected_path": config.PROJECT_ROOT / rejected_path,
+        "chosen_risk_path": config.PROJECT_ROOT / chosen_risk_path if chosen_risk_path else None,
+        "rejected_risk_path": config.PROJECT_ROOT / rejected_risk_path if rejected_risk_path else None,
     }
 
 
 # ============================================================================
-# Heatmap Functions
+# Helper Functions
 # ============================================================================
-def create_heatmap(image: Image.Image, patch_scores: list, grid_size: int = 7, alpha: float = 0.5) -> Image.Image:
-    """Create heatmap overlay."""
+def format_gaps_detail(gaps: list) -> str:
+    """Format gaps list for display."""
+    if not gaps:
+        return "None"
+    details = []
+    for gap in gaps:
+        issue = gap.get('issue', 'unknown')
+        obj = gap.get('object_noun', 'object')
+        expected = gap.get('expected', '')
+        found = gap.get('found', '')
+        if issue == 'wrong_color':
+            details.append(f"{obj}: expected {expected}, found {found}")
+        elif issue == 'missing':
+            details.append(f"{obj}: missing")
+        else:
+            details.append(f"{obj}: {issue}")
+    return "; ".join(details)
+
+
+def create_live_heatmap(image: Image.Image, patch_scores: list, grid_size: int = 7, alpha: float = 0.5) -> Image.Image:
+    """Create heatmap overlay for live mode (patch-based CLIP scoring)."""
     scores_array = np.array(patch_scores).reshape(grid_size, grid_size)
     img_array = np.array(image.convert("RGB"))
     h, w = img_array.shape[:2]
@@ -129,7 +165,7 @@ def create_heatmap(image: Image.Image, patch_scores: list, grid_size: int = 7, a
 # Gradio Interface
 # ============================================================================
 def browse_pairs(pair_selection: str, config: Config):
-    """Browse pre-generated pairs."""
+    """Browse pre-generated pairs with risk maps."""
     if not pair_selection:
         return None, None, None, None, "Select a pair"
 
@@ -143,25 +179,42 @@ def browse_pairs(pair_selection: str, config: Config):
     chosen_img = Image.open(details["chosen_path"]) if details["chosen_path"].exists() else None
     rejected_img = Image.open(details["rejected_path"]) if details["rejected_path"].exists() else None
 
-    # Create heatmaps
-    chosen_heat = create_heatmap(chosen_img, details["chosen_patches"]) if chosen_img else None
-    rejected_heat = create_heatmap(rejected_img, details["rejected_patches"]) if rejected_img else None
+    # Load risk maps
+    chosen_risk = None
+    rejected_risk = None
+    if details["chosen_risk_path"] and details["chosen_risk_path"].exists():
+        chosen_risk = Image.open(details["chosen_risk_path"])
+    if details["rejected_risk_path"] and details["rejected_risk_path"].exists():
+        rejected_risk = Image.open(details["rejected_risk_path"])
+
+    # Format gaps detail
+    gaps_detail = format_gaps_detail(details["rejected_gaps_detail"])
+
+    failure_labels = {
+        "attribute": "ATTRIBUTE (color/size/material)",
+        "object": "OBJECT (wrong object)",
+        "spatial": "SPATIAL/COUNT"
+    }
 
     info = f"""**Prompt:** {details['prompt']}
 
-**Chosen Score:** {details['chosen_score']:.4f}
-**Rejected Score:** {details['rejected_score']:.4f}
+**Failure Type:** {failure_labels.get(details['failure_type'], details['failure_type'])}
+
+**Chosen Score:** {details['chosen_score']:.4f} (gaps: {details['chosen_gaps']})
+**Rejected Score:** {details['rejected_score']:.4f} (gaps: {details['rejected_gaps']})
 **Score Gap:** {details['chosen_score'] - details['rejected_score']:.4f}
 
+**Detected Issues:** {gaps_detail}
+
 **Interpretation:**
-- Green regions = high faithfulness to prompt
-- Red regions = low faithfulness (potential issues)
+- RED regions in risk map = issues detected (wrong color, missing object, low score)
+- No overlay = correct objects matching baseline prompt
 """
-    return chosen_img, rejected_img, chosen_heat, rejected_heat, info
+    return chosen_img, rejected_img, chosen_risk, rejected_risk, info
 
 
 def create_browse_interface(config: Config):
-    """Create browse interface for pre-generated pairs."""
+    """Create browse interface for pre-generated pairs with risk maps."""
     pairs = get_all_pairs(config)
 
     if not pairs:
@@ -170,35 +223,35 @@ def create_browse_interface(config: Config):
     pair_choices = [f"{p[0]} | {p[1][:50]}... (gap: {p[5]-p[4]:.3f})" for p in pairs]
 
     with gr.Blocks() as interface:
-        gr.Markdown("# TiPAI POC: Patch-Level Faithfulness Demo")
-        gr.Markdown("Select a prompt to see chosen vs rejected images with faithfulness heatmaps.")
+        gr.Markdown("# TiPAI: Object-Level Faithfulness Demo")
+        gr.Markdown("Select a pair to see chosen vs rejected images with risk maps (RED = issues).")
 
-        pair_dropdown = gr.Dropdown(choices=pair_choices, label="Select Prompt", value=pair_choices[0] if pair_choices else None)
+        pair_dropdown = gr.Dropdown(choices=pair_choices, label="Select Pair", value=pair_choices[0] if pair_choices else None)
 
         with gr.Row():
             with gr.Column():
-                gr.Markdown("### CHOSEN (Best)")
+                gr.Markdown("### CHOSEN (v0_original)")
                 chosen_img = gr.Image(label="Chosen Image", type="pil")
-                chosen_heat = gr.Image(label="Chosen Heatmap", type="pil")
+                chosen_risk = gr.Image(label="Chosen Risk Map", type="pil")
 
             with gr.Column():
-                gr.Markdown("### REJECTED (Worst)")
+                gr.Markdown("### REJECTED (variation)")
                 rejected_img = gr.Image(label="Rejected Image", type="pil")
-                rejected_heat = gr.Image(label="Rejected Heatmap", type="pil")
+                rejected_risk = gr.Image(label="Rejected Risk Map", type="pil")
 
         info_box = gr.Markdown("")
 
         pair_dropdown.change(
             fn=lambda x: browse_pairs(x, config),
             inputs=[pair_dropdown],
-            outputs=[chosen_img, rejected_img, chosen_heat, rejected_heat, info_box]
+            outputs=[chosen_img, rejected_img, chosen_risk, rejected_risk, info_box]
         )
 
         # Load first pair on start
         if pair_choices:
             interface.load(
                 fn=lambda: browse_pairs(pair_choices[0], config),
-                outputs=[chosen_img, rejected_img, chosen_heat, rejected_heat, info_box]
+                outputs=[chosen_img, rejected_img, chosen_risk, rejected_risk, info_box]
             )
 
     return interface
@@ -263,7 +316,7 @@ def score_image_live(image: Image.Image, prompt: str) -> tuple:
             score = ((text_emb @ patch_emb.T).item() + 1) / 2
             patch_scores.append(score)
 
-    heatmap = create_heatmap(image, patch_scores)
+    heatmap = create_live_heatmap(image, patch_scores)
     return global_score, patch_scores, heatmap
 
 
@@ -326,14 +379,15 @@ def main():
 
     config = Config()
 
-    # Ensure dataset is available (download from HF if not local)
-    from utils.hf_utils import ensure_dataset_available
-    if not ensure_dataset_available(config.IMAGES_DIR):
-        print("ERROR: Could not get dataset locally or from HuggingFace.")
+    # Check if database exists
+    if not config.DB_PATH.exists():
+        print(f"ERROR: Database not found at {config.DB_PATH}")
+        print("Run the pipeline first: m01 -> m02 -> m03 -> m04")
         return
 
     if args.live:
         print("Starting LIVE mode (requires CUDA)...")
+        print("Note: Live mode uses patch-based CLIP scoring for quick testing")
         interface = create_live_interface()
     else:
         print("Starting BROWSE mode...")

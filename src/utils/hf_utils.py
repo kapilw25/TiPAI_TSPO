@@ -47,42 +47,73 @@ def get_dataset_stats(db_path: Path) -> dict:
 
     stats = {}
 
+    # Helper to check if table exists
+    def table_exists(name):
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,))
+        return cursor.fetchone() is not None
+
     # Image counts
-    cursor.execute("SELECT COUNT(*) FROM images")
-    stats["total_images"] = cursor.fetchone()[0]
+    if table_exists("images"):
+        cursor.execute("SELECT COUNT(*) FROM images")
+        stats["total_images"] = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(DISTINCT prompt_id) FROM images")
-    stats["total_prompts"] = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT prompt_id) FROM images")
+        stats["total_prompts"] = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(DISTINCT prompt_category) FROM images")
-    stats["total_categories"] = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT prompt_category) FROM images")
+        stats["total_categories"] = cursor.fetchone()[0]
 
-    # Category breakdown
-    cursor.execute("""
-        SELECT prompt_category, COUNT(*) as count
-        FROM images GROUP BY prompt_category ORDER BY count DESC
-    """)
-    stats["categories"] = {row[0]: row[1] for row in cursor.fetchall()}
+        # Category breakdown
+        cursor.execute("""
+            SELECT prompt_category, COUNT(*) as count
+            FROM images GROUP BY prompt_category ORDER BY count DESC
+        """)
+        stats["categories"] = {row[0]: row[1] for row in cursor.fetchall()}
 
-    # Score stats
-    cursor.execute("SELECT COUNT(*) FROM scores")
-    stats["scored_images"] = cursor.fetchone()[0]
+    # Signal stats (new schema)
+    if table_exists("signals"):
+        cursor.execute("SELECT COUNT(*) FROM signals")
+        stats["scored_images"] = cursor.fetchone()[0]
 
-    cursor.execute("SELECT AVG(global_score), MIN(global_score), MAX(global_score) FROM scores")
-    row = cursor.fetchone()
-    if row[0]:
-        stats["avg_score"] = round(row[0], 4)
-        stats["min_score"] = round(row[1], 4)
-        stats["max_score"] = round(row[2], 4)
+        cursor.execute("SELECT AVG(avg_object_score), MIN(avg_object_score), MAX(avg_object_score) FROM signals")
+        row = cursor.fetchone()
+        if row[0]:
+            stats["avg_score"] = round(row[0], 4)
+            stats["min_score"] = round(row[1], 4)
+            stats["max_score"] = round(row[2], 4)
+
+        cursor.execute("SELECT AVG(num_gaps), AVG(num_objects) FROM signals")
+        row = cursor.fetchone()
+        if row[0]:
+            stats["avg_gaps"] = round(row[0], 2)
+            stats["avg_objects"] = round(row[1], 2)
+
+    # Legacy scores table (for backwards compatibility)
+    elif table_exists("scores"):
+        cursor.execute("SELECT COUNT(*) FROM scores")
+        stats["scored_images"] = cursor.fetchone()[0]
+
+        # Check which columns exist
+        cursor.execute("PRAGMA table_info(scores)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        if "baseline_score" in columns:
+            cursor.execute("SELECT AVG(baseline_score), MIN(baseline_score), MAX(baseline_score) FROM scores")
+            row = cursor.fetchone()
+            if row[0]:
+                stats["avg_score"] = round(row[0], 4)
+                stats["min_score"] = round(row[1], 4)
+                stats["max_score"] = round(row[2], 4)
 
     # Pair stats
-    cursor.execute("SELECT COUNT(*) FROM pairs")
-    stats["total_pairs"] = cursor.fetchone()[0]
+    if table_exists("pairs"):
+        cursor.execute("SELECT COUNT(*) FROM pairs")
+        stats["total_pairs"] = cursor.fetchone()[0]
 
-    cursor.execute("SELECT AVG(score_gap) FROM pairs")
-    row = cursor.fetchone()
-    if row[0]:
-        stats["avg_score_gap"] = round(row[0], 4)
+        cursor.execute("SELECT AVG(score_gap) FROM pairs")
+        row = cursor.fetchone()
+        if row[0]:
+            stats["avg_score_gap"] = round(row[0], 4)
 
     conn.close()
     return stats
@@ -290,24 +321,72 @@ def push_dataset_to_hf(db_path: Path = None, images_dir: Path = None, push_readm
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT
-            i.image_id, i.prompt_id, i.base_id, i.variation,
-            i.prompt_text, i.prompt_category, i.seed, i.image_path,
-            COALESCE(s.global_score, 0.0) as global_score,
-            COALESCE(s.patch_scores, '[]') as patch_scores
-        FROM images i
-        LEFT JOIN scores s ON i.image_id = s.image_id
-        ORDER BY i.base_id, i.variation
-    """)
+    # Helper to check table exists
+    def table_exists(name):
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,))
+        return cursor.fetchone() is not None
+
+    # Check which tables exist
+    signals_exists = table_exists("signals")
+    scores_exists = table_exists("scores")
+
+    if signals_exists:
+        # New schema with signals table
+        print("Using signals table (new schema)")
+        cursor.execute("""
+            SELECT
+                i.image_id, i.prompt_id, i.base_id, i.variation,
+                i.baseline_prompt, i.generation_prompt, i.prompt_category, i.seed, i.image_path,
+                COALESCE(s.avg_object_score, 0.0) as avg_score,
+                COALESCE(s.objects_json, '[]') as objects_json,
+                COALESCE(s.num_gaps, 0) as num_gaps,
+                COALESCE(s.gaps_json, '[]') as gaps_json
+            FROM images i
+            LEFT JOIN signals s ON i.image_id = s.image_id
+            ORDER BY i.base_id, i.variation
+        """)
+    elif scores_exists:
+        # Legacy scores table
+        print("Using scores table (legacy schema)")
+        cursor.execute("""
+            SELECT
+                i.image_id, i.prompt_id, i.base_id, i.variation,
+                i.baseline_prompt, i.generation_prompt, i.prompt_category, i.seed, i.image_path,
+                COALESCE(s.baseline_score, 0.0) as avg_score,
+                '[]' as objects_json,
+                0 as num_gaps,
+                '[]' as gaps_json
+            FROM images i
+            LEFT JOIN scores s ON i.image_id = s.image_id
+            ORDER BY i.base_id, i.variation
+        """)
+    else:
+        print("Note: No scoring tables found. Pushing images only.")
+        cursor.execute("""
+            SELECT
+                image_id, prompt_id, base_id, variation,
+                baseline_prompt, generation_prompt, prompt_category, seed, image_path,
+                0.0 as avg_score,
+                '[]' as objects_json,
+                0 as num_gaps,
+                '[]' as gaps_json
+            FROM images
+            ORDER BY base_id, variation
+        """)
     rows = cursor.fetchall()
 
-    # Load pairs for failure type info
-    cursor.execute("SELECT chosen_image_id, rejected_image_id, failure_type, score_gap FROM pairs")
+    # Load pairs for failure type info (if table exists)
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pairs'")
+    pairs_table_exists = cursor.fetchone() is not None
+
     pairs_info = {}
-    for chosen_id, rejected_id, failure_type, gap in cursor.fetchall():
-        pairs_info[chosen_id] = ("chosen", None, gap)
-        pairs_info[rejected_id] = ("rejected", failure_type, gap)
+    if pairs_table_exists:
+        cursor.execute("SELECT chosen_image_id, rejected_image_id, failure_type, score_gap FROM pairs")
+        for chosen_id, rejected_id, failure_type, gap in cursor.fetchall():
+            pairs_info[chosen_id] = ("chosen", None, gap)
+            pairs_info[rejected_id] = ("rejected", failure_type, gap)
+    else:
+        print("Note: pairs table not found. Pushing without pair info.")
 
     conn.close()
 
@@ -318,13 +397,14 @@ def push_dataset_to_hf(db_path: Path = None, images_dir: Path = None, push_readm
     # Build dataset
     data = {
         "image_id": [], "prompt_id": [], "base_id": [], "variation": [],
-        "prompt": [], "category": [], "seed": [], "image": [],
-        "global_score": [], "patch_scores": [],
+        "baseline_prompt": [], "generation_prompt": [],
+        "category": [], "seed": [], "image": [],
+        "avg_score": [], "objects_json": [], "num_gaps": [], "gaps_json": [],
         "pair_role": [], "failure_type": [], "score_gap": []
     }
 
     for row in rows:
-        image_id, prompt_id, base_id, variation, prompt, category, seed, image_path, score, patches = row
+        image_id, prompt_id, base_id, variation, baseline_prompt, generation_prompt, category, seed, image_path, avg_score, objects_json, num_gaps, gaps_json = row
         full_path = project_root / image_path
 
         if not full_path.exists():
@@ -337,12 +417,15 @@ def push_dataset_to_hf(db_path: Path = None, images_dir: Path = None, push_readm
         data["prompt_id"].append(prompt_id)
         data["base_id"].append(base_id)
         data["variation"].append(variation)
-        data["prompt"].append(prompt)
+        data["baseline_prompt"].append(baseline_prompt)
+        data["generation_prompt"].append(generation_prompt)
         data["category"].append(category)
         data["seed"].append(seed)
         data["image"].append(str(full_path))
-        data["global_score"].append(score)
-        data["patch_scores"].append(patches)
+        data["avg_score"].append(avg_score)
+        data["objects_json"].append(objects_json)
+        data["num_gaps"].append(num_gaps)
+        data["gaps_json"].append(gaps_json)
         data["pair_role"].append(pair_role)
         data["failure_type"].append(failure_type)
         data["score_gap"].append(score_gap)

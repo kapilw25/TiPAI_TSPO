@@ -4,10 +4,18 @@ Score images using CLIP (global + patch-level).
 Reads from: centralized.db (images table)
 Writes to: centralized.db (scores table)
 
+KEY DESIGN:
+  - self_score: Image scored against its OWN prompt (generation quality)
+  - baseline_score: Image scored against v0_original prompt (faithfulness to baseline)
+
+  For POC comparison, baseline_score is what matters:
+    v0 image vs v0 prompt → high baseline_score
+    v1 image vs v0 prompt → low baseline_score (different attribute)
+
 REQUIRES: CUDA GPU
 
 Run:
-    python src/m02_clip_scoring.py
+    python -u src/m02_clip_scoring.py 2>&1 | tee logs/m02_$(date +%Y%m%d_%H%M%S).log
 """
 
 import json
@@ -41,12 +49,17 @@ class Config:
 def init_scores_table(conn: sqlite3.Connection) -> None:
     """Create scores table if not exists."""
     cursor = conn.cursor()
+    # Drop old table to recreate with new schema
+    cursor.execute("DROP TABLE IF EXISTS scores")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS scores (
             image_id TEXT PRIMARY KEY,
             prompt_text TEXT NOT NULL,
-            global_score REAL NOT NULL,
-            patch_scores TEXT NOT NULL,
+            baseline_prompt TEXT NOT NULL,
+            self_score REAL NOT NULL,
+            self_patch_scores TEXT NOT NULL,
+            baseline_score REAL NOT NULL,
+            baseline_patch_scores TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -54,11 +67,19 @@ def init_scores_table(conn: sqlite3.Connection) -> None:
 
 
 def get_images_to_score(conn: sqlite3.Connection) -> list:
-    """Get all images that need scoring."""
+    """Get all images that need scoring with their baseline (v0) prompt."""
     cursor = conn.cursor()
+    # Get all images with their v0_original baseline prompt
     cursor.execute("""
-        SELECT i.image_id, i.prompt_text, i.image_path
+        SELECT
+            i.image_id,
+            i.prompt_text,
+            i.image_path,
+            i.base_id,
+            i.variation,
+            v0.prompt_text as baseline_prompt
         FROM images i
+        LEFT JOIN images v0 ON i.base_id = v0.base_id AND v0.variation = 'v0_original'
         LEFT JOIN scores s ON i.image_id = s.image_id
         WHERE s.image_id IS NULL
     """)
@@ -66,13 +87,17 @@ def get_images_to_score(conn: sqlite3.Connection) -> list:
 
 
 def save_score(conn: sqlite3.Connection, image_id: str, prompt_text: str,
-               global_score: float, patch_scores: list) -> None:
+               baseline_prompt: str, self_score: float, self_patch_scores: list,
+               baseline_score: float, baseline_patch_scores: list) -> None:
     """Save score to database."""
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO scores (image_id, prompt_text, global_score, patch_scores)
-        VALUES (?, ?, ?, ?)
-    """, (image_id, prompt_text, global_score, json.dumps(patch_scores)))
+        INSERT OR REPLACE INTO scores
+        (image_id, prompt_text, baseline_prompt, self_score, self_patch_scores,
+         baseline_score, baseline_patch_scores)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (image_id, prompt_text, baseline_prompt, self_score, json.dumps(self_patch_scores),
+          baseline_score, json.dumps(baseline_patch_scores)))
     conn.commit()
 
 
@@ -170,24 +195,29 @@ def score_all_images(config: Config) -> None:
     print(f"Images to score: {len(images)}")
     model, preprocess, tokenizer = load_clip_model(config)
 
-    for image_id, prompt_text, image_path in tqdm(images, desc="Scoring"):
+    for image_id, prompt_text, image_path, base_id, variation, baseline_prompt in tqdm(images, desc="Scoring"):
         full_path = config.PROJECT_ROOT / image_path
         if not full_path.exists():
             print(f"Image not found: {full_path}")
             continue
 
         image = Image.open(full_path).convert("RGB")
-
-        # Global score
-        text_emb = get_text_embedding(model, tokenizer, prompt_text)
         img_emb = get_image_embedding(model, preprocess, image)
-        global_score = compute_global_score(text_emb, img_emb)
 
-        # Patch scores
-        patch_scores = compute_patch_scores(model, preprocess, tokenizer,
-                                           image, prompt_text, config.PATCH_GRID)
+        # Self score (image vs its own prompt) - measures generation quality
+        self_text_emb = get_text_embedding(model, tokenizer, prompt_text)
+        self_score = compute_global_score(self_text_emb, img_emb)
+        self_patch_scores = compute_patch_scores(model, preprocess, tokenizer,
+                                                  image, prompt_text, config.PATCH_GRID)
 
-        save_score(conn, image_id, prompt_text, global_score, patch_scores)
+        # Baseline score (image vs v0_original prompt) - measures faithfulness to baseline
+        baseline_text_emb = get_text_embedding(model, tokenizer, baseline_prompt)
+        baseline_score = compute_global_score(baseline_text_emb, img_emb)
+        baseline_patch_scores = compute_patch_scores(model, preprocess, tokenizer,
+                                                      image, baseline_prompt, config.PATCH_GRID)
+
+        save_score(conn, image_id, prompt_text, baseline_prompt,
+                   self_score, self_patch_scores, baseline_score, baseline_patch_scores)
 
     conn.close()
     print("Done!")

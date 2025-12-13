@@ -2,6 +2,8 @@
 m04_create_pairs.py
 Create chosen/rejected pairs from variation-based images.
 
+Uses signals from m02 and risk_maps from m03.
+
 Pairing Logic:
   - v0_original (chosen) vs v1_attribute (rejected) → attribute failure
   - v0_original (chosen) vs v2_object (rejected) → object failure
@@ -10,7 +12,7 @@ Pairing Logic:
 Output: 20 base prompts × 3 pairs = 60 pairs
 
 Run:
-    python src/m04_create_pairs.py
+    python -u src/m04_create_pairs.py 2>&1 | tee logs/m04_$(date +%Y%m%d_%H%M%S).log
 """
 
 import json
@@ -30,7 +32,7 @@ class Config:
     PROJECT_ROOT = Path(__file__).parent.parent
     DB_PATH = PROJECT_ROOT / "outputs" / "centralized.db"
     IMAGES_DIR = PROJECT_ROOT / "outputs" / "m01_images"
-    HEATMAPS_DIR = PROJECT_ROOT / "outputs" / "m03_heatmaps"
+    RISK_MAPS_DIR = PROJECT_ROOT / "outputs" / "m03_risk_maps"
     OUTPUT_DIR = PROJECT_ROOT / "outputs" / "m04_pairs"
 
 
@@ -59,25 +61,27 @@ def init_pairs_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def get_scores_by_base_id(conn: sqlite3.Connection) -> dict:
-    """Get all scores grouped by base_id with variation info."""
+def get_signals_by_base_id(conn: sqlite3.Connection) -> dict:
+    """Get all signals grouped by base_id with variation info."""
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT i.base_id, i.variation, i.prompt_text, s.image_id, s.global_score, i.image_path
-        FROM scores s
+        SELECT i.base_id, i.variation, i.generation_prompt, s.image_id,
+               s.avg_object_score, i.image_path, s.num_gaps
+        FROM signals s
         JOIN images i ON s.image_id = i.image_id
         ORDER BY i.base_id, i.variation
     """)
 
     results = {}
-    for base_id, variation, prompt_text, image_id, score, image_path in cursor.fetchall():
+    for base_id, variation, prompt_text, image_id, score, image_path, num_gaps in cursor.fetchall():
         if base_id not in results:
             results[base_id] = {}
         results[base_id][variation] = {
             "prompt_text": prompt_text,
             "image_id": image_id,
-            "score": score,
-            "path": image_path
+            "score": score or 0.0,
+            "path": image_path,
+            "num_gaps": num_gaps or 0
         }
     return results
 
@@ -103,18 +107,19 @@ def save_pair(conn: sqlite3.Connection, pair_id: str, base_id: str, failure_type
 # Pair Creation
 # ============================================================================
 def create_comparison_image(chosen_path: Path, rejected_path: Path,
-                           chosen_heatmap: Path, rejected_heatmap: Path,
+                           chosen_risk_map: Path, rejected_risk_map: Path,
                            chosen_prompt: str, rejected_prompt: str,
                            failure_type: str,
-                           chosen_score: float, rejected_score: float) -> Image.Image:
+                           chosen_score: float, rejected_score: float,
+                           rejected_gaps: int = 0) -> Image.Image:
     """Create 2x2 comparison grid with failure type info."""
     fig, axes = plt.subplots(2, 2, figsize=(14, 12))
 
     # Load images
     chosen_img = Image.open(chosen_path) if chosen_path.exists() else None
     rejected_img = Image.open(rejected_path) if rejected_path.exists() else None
-    chosen_heat = Image.open(chosen_heatmap) if chosen_heatmap.exists() else None
-    rejected_heat = Image.open(rejected_heatmap) if rejected_heatmap.exists() else None
+    chosen_risk = Image.open(chosen_risk_map) if chosen_risk_map.exists() else None
+    rejected_risk = Image.open(rejected_risk_map) if rejected_risk_map.exists() else None
 
     # Row 1: Original images
     if chosen_img:
@@ -125,19 +130,19 @@ def create_comparison_image(chosen_path: Path, rejected_path: Path,
 
     if rejected_img:
         axes[0, 1].imshow(rejected_img)
-    axes[0, 1].set_title(f'REJECTED (score: {rejected_score:.3f})\n"{rejected_prompt[:50]}..."',
+    axes[0, 1].set_title(f'REJECTED (score: {rejected_score:.3f}, gaps: {rejected_gaps})\n"{rejected_prompt[:50]}..."',
                          fontsize=10, color='red', fontweight='bold')
     axes[0, 1].axis('off')
 
-    # Row 2: Heatmaps
-    if chosen_heat:
-        axes[1, 0].imshow(chosen_heat)
-    axes[1, 0].set_title('Chosen Heatmap', fontsize=10)
+    # Row 2: Risk Maps
+    if chosen_risk:
+        axes[1, 0].imshow(chosen_risk)
+    axes[1, 0].set_title('Chosen Risk Map', fontsize=10)
     axes[1, 0].axis('off')
 
-    if rejected_heat:
-        axes[1, 1].imshow(rejected_heat)
-    axes[1, 1].set_title('Rejected Heatmap', fontsize=10)
+    if rejected_risk:
+        axes[1, 1].imshow(rejected_risk)
+    axes[1, 1].set_title('Rejected Risk Map (RED = issues)', fontsize=10)
     axes[1, 1].axis('off')
 
     # Main title with failure type
@@ -153,7 +158,9 @@ def create_comparison_image(chosen_path: Path, rejected_path: Path,
 
     # Convert to PIL
     fig.canvas.draw()
-    result = Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
+    buf = fig.canvas.buffer_rgba()
+    result = Image.frombuffer('RGBA', fig.canvas.get_width_height(), buf, 'raw', 'RGBA', 0, 1)
+    result = result.convert('RGB')
     plt.close(fig)
 
     return result
@@ -161,19 +168,22 @@ def create_comparison_image(chosen_path: Path, rejected_path: Path,
 
 def create_all_pairs(config: Config) -> None:
     """Create variation-based pairs: v0 (chosen) vs v1/v2/v3 (rejected)."""
-    # Ensure dataset is available (download from HF if not local)
-    from utils.hf_utils import ensure_dataset_available
-    if not ensure_dataset_available(config.IMAGES_DIR):
-        print("ERROR: Could not get dataset locally or from HuggingFace.")
-        return
-
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(config.DB_PATH))
+
+    # Check if signals table exists
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='signals'")
+    if not cursor.fetchone():
+        print("ERROR: No signals table found. Run m02_extract_signals.py first.")
+        conn.close()
+        return
+
     init_pairs_table(conn)
 
-    scores_by_base = get_scores_by_base_id(conn)
-    if not scores_by_base:
-        print("No scores found. Run m02_clip_scoring.py first.")
+    signals_by_base = get_signals_by_base_id(conn)
+    if not signals_by_base:
+        print("No signals found. Run m02_extract_signals.py first.")
         conn.close()
         return
 
@@ -184,10 +194,10 @@ def create_all_pairs(config: Config) -> None:
         ("v3_spatial", "spatial"),
     ]
 
-    total_pairs = len(scores_by_base) * len(variation_pairs)
-    print(f"Creating {total_pairs} pairs for {len(scores_by_base)} base prompts...")
+    total_pairs = len(signals_by_base) * len(variation_pairs)
+    print(f"Creating {total_pairs} pairs for {len(signals_by_base)} base prompts...")
 
-    for base_id, variations in tqdm(scores_by_base.items(), desc="Creating pairs"):
+    for base_id, variations in tqdm(signals_by_base.items(), desc="Creating pairs"):
         # v0_original is always the chosen image
         if "v0_original" not in variations:
             print(f"Skipping {base_id}: no v0_original found")
@@ -205,16 +215,17 @@ def create_all_pairs(config: Config) -> None:
             # Paths
             chosen_img_path = config.PROJECT_ROOT / chosen["path"]
             rejected_img_path = config.PROJECT_ROOT / rejected["path"]
-            chosen_heatmap = config.HEATMAPS_DIR / f"{chosen['image_id']}_heatmap.png"
-            rejected_heatmap = config.HEATMAPS_DIR / f"{rejected['image_id']}_heatmap.png"
+            chosen_risk_map = config.RISK_MAPS_DIR / f"{chosen['image_id']}_risk_map.png"
+            rejected_risk_map = config.RISK_MAPS_DIR / f"{rejected['image_id']}_risk_map.png"
 
             # Create comparison
             comparison = create_comparison_image(
                 chosen_img_path, rejected_img_path,
-                chosen_heatmap, rejected_heatmap,
+                chosen_risk_map, rejected_risk_map,
                 chosen["prompt_text"], rejected["prompt_text"],
                 failure_type,
-                chosen["score"], rejected["score"]
+                chosen["score"], rejected["score"],
+                rejected["num_gaps"]
             )
 
             comparison_filename = f"{pair_id}_comparison.png"

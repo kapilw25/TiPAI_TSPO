@@ -54,7 +54,7 @@ env.bak/
 venv.bak/
 
 # Data files
-data/*.json
+# data/*.json
 # data/*.csv
 data/*.pkl
 data/*.parquet
@@ -134,15 +134,15 @@ lightning_logs/
 # Large output files and checkpoints (ALLOW metadata, BLOCK binaries)
 # Keep: *.json, README.md, .db files (small metadata)
 # Block: Large binaries only
-outputs/**/optimizer.pt        # 160MB+ optimizer state
-outputs/**/scheduler.pt        # Large scheduler state
-outputs/**/*.safetensors       # 80MB+ model weights
-outputs/**/tokenizer.json      # 17MB tokenizer (can rebuild)
-outputs/**/*.arrow             # Large Arrow datasets
-outputs/**/checkpoints/        # Old rule (redundant with above)
-outputs/**/adapter/            # Old rule
-outputs/**/cache/              # Old rule
-outputs/**/kfac_matrices/      # Old rule
+# outputs/**/optimizer.pt        # 160MB+ optimizer state
+# outputs/**/scheduler.pt        # Large scheduler state
+# outputs/**/*.safetensors       # 80MB+ model weights
+# outputs/**/tokenizer.json      # 17MB tokenizer (can rebuild)
+# outputs/**/*.arrow             # Large Arrow datasets
+# outputs/**/checkpoints/        # Old rule (redundant with above)
+# outputs/**/adapter/            # Old rule
+# outputs/**/cache/              # Old rule
+# outputs/**/kfac_matrices/      # Old rule
 
 # NVIDIA libraries in virtual environment
 **/nvidia/
