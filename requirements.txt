@@ -1,0 +1,30 @@
+# TiPAI-TSPO POC Requirements
+# Python 3.10+
+
+# Core ML
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Image Generation
+diffusers>=0.24.0
+accelerate>=0.25.0
+transformers>=4.35.0
+
+# CLIP Scoring
+open-clip-torch>=2.23.0
+
+# Image Processing
+Pillow>=10.0.0
+opencv-python>=4.8.0
+
+# Data & Visualization
+numpy>=1.24.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+scipy>=1.11.0
+
+# Demo UI
+gradio>=4.0.0
+
+# Utilities
+tqdm>=4.65.0
