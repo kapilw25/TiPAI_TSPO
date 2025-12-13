@@ -1,0 +1,595 @@
+{
+  "metadata": {
+    "description": "TiPAI-TSPO SDXL Dataset: 20 base prompts × 4 variations (3 objects, 1 changed per variation)",
+    "variation_types": {
+      "v0_original": "Correct prompt (chosen baseline)",
+      "v1_attribute": "Wrong color on 1 object",
+      "v2_object": "1 object swapped",
+      "v3_spatial": "Wrong spatial relation for 1 object"
+    },
+    "total_prompts": 80,
+    "seed": 42,
+    "design_note": "3 objects per prompt. Each variation changes exactly 1 object for clear segment identification. Optimized for SDXL."
+  },
+  "prompts": [
+    {
+      "id": "scene_01_v0",
+      "base_id": "scene_01",
+      "category": "beach_scene",
+      "variation": "v0_original",
+      "text": "a red sports car, blue umbrella, and white surfboard on a sandy beach"
+    },
+    {
+      "id": "scene_01_v1",
+      "base_id": "scene_01",
+      "category": "beach_scene",
+      "variation": "v1_attribute",
+      "text": "a purple sports car, blue umbrella, and white surfboard on a sandy beach"
+    },
+    {
+      "id": "scene_01_v2",
+      "base_id": "scene_01",
+      "category": "beach_scene",
+      "variation": "v2_object",
+      "text": "a red motorcycle, blue umbrella, and white surfboard on a sandy beach"
+    },
+    {
+      "id": "scene_01_v3",
+      "base_id": "scene_01",
+      "category": "beach_scene",
+      "variation": "v3_spatial",
+      "text": "a red sports car floating in water, blue umbrella, and white surfboard on a sandy beach"
+    },
+
+    {
+      "id": "scene_02_v0",
+      "base_id": "scene_02",
+      "category": "living_room",
+      "variation": "v0_original",
+      "text": "a golden retriever, tabby cat, and red ball in a cozy living room"
+    },
+    {
+      "id": "scene_02_v1",
+      "base_id": "scene_02",
+      "category": "living_room",
+      "variation": "v1_attribute",
+      "text": "a black retriever, tabby cat, and red ball in a cozy living room"
+    },
+    {
+      "id": "scene_02_v2",
+      "base_id": "scene_02",
+      "category": "living_room",
+      "variation": "v2_object",
+      "text": "a golden hamster, tabby cat, and red ball in a cozy living room"
+    },
+    {
+      "id": "scene_02_v3",
+      "base_id": "scene_02",
+      "category": "living_room",
+      "variation": "v3_spatial",
+      "text": "a golden retriever on the ceiling, tabby cat, and red ball in a cozy living room"
+    },
+
+    {
+      "id": "scene_03_v0",
+      "base_id": "scene_03",
+      "category": "kitchen",
+      "variation": "v0_original",
+      "text": "a white coffee cup, silver toaster, and red apple on a kitchen counter"
+    },
+    {
+      "id": "scene_03_v1",
+      "base_id": "scene_03",
+      "category": "kitchen",
+      "variation": "v1_attribute",
+      "text": "a black coffee cup, silver toaster, and red apple on a kitchen counter"
+    },
+    {
+      "id": "scene_03_v2",
+      "base_id": "scene_03",
+      "category": "kitchen",
+      "variation": "v2_object",
+      "text": "a white teapot, silver toaster, and red apple on a kitchen counter"
+    },
+    {
+      "id": "scene_03_v3",
+      "base_id": "scene_03",
+      "category": "kitchen",
+      "variation": "v3_spatial",
+      "text": "a white coffee cup under counter, silver toaster, and red apple on a kitchen counter"
+    },
+
+    {
+      "id": "scene_04_v0",
+      "base_id": "scene_04",
+      "category": "park",
+      "variation": "v0_original",
+      "text": "a red bicycle, brown wooden bench, and white dog in a sunny park"
+    },
+    {
+      "id": "scene_04_v1",
+      "base_id": "scene_04",
+      "category": "park",
+      "variation": "v1_attribute",
+      "text": "a blue bicycle, brown wooden bench, and white dog in a sunny park"
+    },
+    {
+      "id": "scene_04_v2",
+      "base_id": "scene_04",
+      "category": "park",
+      "variation": "v2_object",
+      "text": "a red scooter, brown wooden bench, and white dog in a sunny park"
+    },
+    {
+      "id": "scene_04_v3",
+      "base_id": "scene_04",
+      "category": "park",
+      "variation": "v3_spatial",
+      "text": "a red bicycle in the pond, brown wooden bench, and white dog in a sunny park"
+    },
+
+    {
+      "id": "scene_05_v0",
+      "base_id": "scene_05",
+      "category": "office",
+      "variation": "v0_original",
+      "text": "a silver laptop, black keyboard, and red coffee mug on an office desk"
+    },
+    {
+      "id": "scene_05_v1",
+      "base_id": "scene_05",
+      "category": "office",
+      "variation": "v1_attribute",
+      "text": "a gold laptop, black keyboard, and red coffee mug on an office desk"
+    },
+    {
+      "id": "scene_05_v2",
+      "base_id": "scene_05",
+      "category": "office",
+      "variation": "v2_object",
+      "text": "a silver tablet, black keyboard, and red coffee mug on an office desk"
+    },
+    {
+      "id": "scene_05_v3",
+      "base_id": "scene_05",
+      "category": "office",
+      "variation": "v3_spatial",
+      "text": "a silver laptop on floor, black keyboard, and red coffee mug on an office desk"
+    },
+
+    {
+      "id": "scene_06_v0",
+      "base_id": "scene_06",
+      "category": "garden",
+      "variation": "v0_original",
+      "text": "a red rose bush, white picket fence, and blue watering can in a garden"
+    },
+    {
+      "id": "scene_06_v1",
+      "base_id": "scene_06",
+      "category": "garden",
+      "variation": "v1_attribute",
+      "text": "a pink rose bush, white picket fence, and blue watering can in a garden"
+    },
+    {
+      "id": "scene_06_v2",
+      "base_id": "scene_06",
+      "category": "garden",
+      "variation": "v2_object",
+      "text": "a red tulip bush, white picket fence, and blue watering can in a garden"
+    },
+    {
+      "id": "scene_06_v3",
+      "base_id": "scene_06",
+      "category": "garden",
+      "variation": "v3_spatial",
+      "text": "a red rose bush behind fence, white picket fence, and blue watering can in a garden"
+    },
+
+    {
+      "id": "scene_07_v0",
+      "base_id": "scene_07",
+      "category": "classroom",
+      "variation": "v0_original",
+      "text": "a green chalkboard, brown wooden desk, and red apple in a classroom"
+    },
+    {
+      "id": "scene_07_v1",
+      "base_id": "scene_07",
+      "category": "classroom",
+      "variation": "v1_attribute",
+      "text": "a white chalkboard, brown wooden desk, and red apple in a classroom"
+    },
+    {
+      "id": "scene_07_v2",
+      "base_id": "scene_07",
+      "category": "classroom",
+      "variation": "v2_object",
+      "text": "a green whiteboard, brown wooden desk, and red apple in a classroom"
+    },
+    {
+      "id": "scene_07_v3",
+      "base_id": "scene_07",
+      "category": "classroom",
+      "variation": "v3_spatial",
+      "text": "a green chalkboard on floor, brown wooden desk, and red apple in a classroom"
+    },
+
+    {
+      "id": "scene_08_v0",
+      "base_id": "scene_08",
+      "category": "bathroom",
+      "variation": "v0_original",
+      "text": "a white bathtub, blue towel, and yellow rubber duck in a modern bathroom"
+    },
+    {
+      "id": "scene_08_v1",
+      "base_id": "scene_08",
+      "category": "bathroom",
+      "variation": "v1_attribute",
+      "text": "a black bathtub, blue towel, and yellow rubber duck in a modern bathroom"
+    },
+    {
+      "id": "scene_08_v2",
+      "base_id": "scene_08",
+      "category": "bathroom",
+      "variation": "v2_object",
+      "text": "a white shower, blue towel, and yellow rubber duck in a modern bathroom"
+    },
+    {
+      "id": "scene_08_v3",
+      "base_id": "scene_08",
+      "category": "bathroom",
+      "variation": "v3_spatial",
+      "text": "a white bathtub on wall, blue towel, and yellow rubber duck in a modern bathroom"
+    },
+
+    {
+      "id": "scene_09_v0",
+      "base_id": "scene_09",
+      "category": "dining_room",
+      "variation": "v0_original",
+      "text": "a round wooden table, red chair, and white candle in a dining room"
+    },
+    {
+      "id": "scene_09_v1",
+      "base_id": "scene_09",
+      "category": "dining_room",
+      "variation": "v1_attribute",
+      "text": "a square wooden table, red chair, and white candle in a dining room"
+    },
+    {
+      "id": "scene_09_v2",
+      "base_id": "scene_09",
+      "category": "dining_room",
+      "variation": "v2_object",
+      "text": "a round wooden table, red stool, and white candle in a dining room"
+    },
+    {
+      "id": "scene_09_v3",
+      "base_id": "scene_09",
+      "category": "dining_room",
+      "variation": "v3_spatial",
+      "text": "a round wooden table, red chair, and white candle under table in a dining room"
+    },
+
+    {
+      "id": "scene_10_v0",
+      "base_id": "scene_10",
+      "category": "bedroom",
+      "variation": "v0_original",
+      "text": "a white bed, blue pillow, and red alarm clock in a cozy bedroom"
+    },
+    {
+      "id": "scene_10_v1",
+      "base_id": "scene_10",
+      "category": "bedroom",
+      "variation": "v1_attribute",
+      "text": "a black bed, blue pillow, and red alarm clock in a cozy bedroom"
+    },
+    {
+      "id": "scene_10_v2",
+      "base_id": "scene_10",
+      "category": "bedroom",
+      "variation": "v2_object",
+      "text": "a white hammock, blue pillow, and red alarm clock in a cozy bedroom"
+    },
+    {
+      "id": "scene_10_v3",
+      "base_id": "scene_10",
+      "category": "bedroom",
+      "variation": "v3_spatial",
+      "text": "a white bed on ceiling, blue pillow, and red alarm clock in a cozy bedroom"
+    },
+
+    {
+      "id": "scene_11_v0",
+      "base_id": "scene_11",
+      "category": "playground",
+      "variation": "v0_original",
+      "text": "a red slide, blue swing, and yellow sandbox on a playground"
+    },
+    {
+      "id": "scene_11_v1",
+      "base_id": "scene_11",
+      "category": "playground",
+      "variation": "v1_attribute",
+      "text": "a purple slide, blue swing, and yellow sandbox on a playground"
+    },
+    {
+      "id": "scene_11_v2",
+      "base_id": "scene_11",
+      "category": "playground",
+      "variation": "v2_object",
+      "text": "a red ladder, blue swing, and yellow sandbox on a playground"
+    },
+    {
+      "id": "scene_11_v3",
+      "base_id": "scene_11",
+      "category": "playground",
+      "variation": "v3_spatial",
+      "text": "a red slide upside down, blue swing, and yellow sandbox on a playground"
+    },
+
+    {
+      "id": "scene_12_v0",
+      "base_id": "scene_12",
+      "category": "cafe",
+      "variation": "v0_original",
+      "text": "a brown espresso machine, white cup, and green plant in a cafe"
+    },
+    {
+      "id": "scene_12_v1",
+      "base_id": "scene_12",
+      "category": "cafe",
+      "variation": "v1_attribute",
+      "text": "a silver espresso machine, white cup, and green plant in a cafe"
+    },
+    {
+      "id": "scene_12_v2",
+      "base_id": "scene_12",
+      "category": "cafe",
+      "variation": "v2_object",
+      "text": "a brown cash register, white cup, and green plant in a cafe"
+    },
+    {
+      "id": "scene_12_v3",
+      "base_id": "scene_12",
+      "category": "cafe",
+      "variation": "v3_spatial",
+      "text": "a brown espresso machine on floor, white cup, and green plant in a cafe"
+    },
+
+    {
+      "id": "scene_13_v0",
+      "base_id": "scene_13",
+      "category": "gym",
+      "variation": "v0_original",
+      "text": "a black treadmill, red dumbbell, and blue yoga mat in a gym"
+    },
+    {
+      "id": "scene_13_v1",
+      "base_id": "scene_13",
+      "category": "gym",
+      "variation": "v1_attribute",
+      "text": "a silver treadmill, red dumbbell, and blue yoga mat in a gym"
+    },
+    {
+      "id": "scene_13_v2",
+      "base_id": "scene_13",
+      "category": "gym",
+      "variation": "v2_object",
+      "text": "a black exercise bike, red dumbbell, and blue yoga mat in a gym"
+    },
+    {
+      "id": "scene_13_v3",
+      "base_id": "scene_13",
+      "category": "gym",
+      "variation": "v3_spatial",
+      "text": "a black treadmill on wall, red dumbbell, and blue yoga mat in a gym"
+    },
+
+    {
+      "id": "scene_14_v0",
+      "base_id": "scene_14",
+      "category": "library",
+      "variation": "v0_original",
+      "text": "a brown bookshelf, red book, and green armchair in a library"
+    },
+    {
+      "id": "scene_14_v1",
+      "base_id": "scene_14",
+      "category": "library",
+      "variation": "v1_attribute",
+      "text": "a black bookshelf, red book, and green armchair in a library"
+    },
+    {
+      "id": "scene_14_v2",
+      "base_id": "scene_14",
+      "category": "library",
+      "variation": "v2_object",
+      "text": "a brown magazine rack, red book, and green armchair in a library"
+    },
+    {
+      "id": "scene_14_v3",
+      "base_id": "scene_14",
+      "category": "library",
+      "variation": "v3_spatial",
+      "text": "a brown bookshelf on floor, red book, and green armchair in a library"
+    },
+
+    {
+      "id": "scene_15_v0",
+      "base_id": "scene_15",
+      "category": "farm",
+      "variation": "v0_original",
+      "text": "a red barn, white chicken, and green tractor on a farm"
+    },
+    {
+      "id": "scene_15_v1",
+      "base_id": "scene_15",
+      "category": "farm",
+      "variation": "v1_attribute",
+      "text": "a blue barn, white chicken, and green tractor on a farm"
+    },
+    {
+      "id": "scene_15_v2",
+      "base_id": "scene_15",
+      "category": "farm",
+      "variation": "v2_object",
+      "text": "a red silo, white chicken, and green tractor on a farm"
+    },
+    {
+      "id": "scene_15_v3",
+      "base_id": "scene_15",
+      "category": "farm",
+      "variation": "v3_spatial",
+      "text": "a red barn behind tractor, white chicken, and green tractor on a farm"
+    },
+
+    {
+      "id": "scene_16_v0",
+      "base_id": "scene_16",
+      "category": "street",
+      "variation": "v0_original",
+      "text": "a yellow taxi, red fire hydrant, and blue mailbox on a city street"
+    },
+    {
+      "id": "scene_16_v1",
+      "base_id": "scene_16",
+      "category": "street",
+      "variation": "v1_attribute",
+      "text": "a black taxi, red fire hydrant, and blue mailbox on a city street"
+    },
+    {
+      "id": "scene_16_v2",
+      "base_id": "scene_16",
+      "category": "street",
+      "variation": "v2_object",
+      "text": "a yellow bus, red fire hydrant, and blue mailbox on a city street"
+    },
+    {
+      "id": "scene_16_v3",
+      "base_id": "scene_16",
+      "category": "street",
+      "variation": "v3_spatial",
+      "text": "a yellow taxi on sidewalk, red fire hydrant, and blue mailbox on a city street"
+    },
+
+    {
+      "id": "scene_17_v0",
+      "base_id": "scene_17",
+      "category": "campsite",
+      "variation": "v0_original",
+      "text": "an orange tent, brown campfire, and blue cooler at a campsite"
+    },
+    {
+      "id": "scene_17_v1",
+      "base_id": "scene_17",
+      "category": "campsite",
+      "variation": "v1_attribute",
+      "text": "a yellow tent, brown campfire, and blue cooler at a campsite"
+    },
+    {
+      "id": "scene_17_v2",
+      "base_id": "scene_17",
+      "category": "campsite",
+      "variation": "v2_object",
+      "text": "an orange hammock, brown campfire, and blue cooler at a campsite"
+    },
+    {
+      "id": "scene_17_v3",
+      "base_id": "scene_17",
+      "category": "campsite",
+      "variation": "v3_spatial",
+      "text": "an orange tent in tree, brown campfire, and blue cooler at a campsite"
+    },
+
+    {
+      "id": "scene_18_v0",
+      "base_id": "scene_18",
+      "category": "photo_studio",
+      "variation": "v0_original",
+      "text": "a black camera, white backdrop, and silver tripod in a photo studio"
+    },
+    {
+      "id": "scene_18_v1",
+      "base_id": "scene_18",
+      "category": "photo_studio",
+      "variation": "v1_attribute",
+      "text": "a gold camera, white backdrop, and silver tripod in a photo studio"
+    },
+    {
+      "id": "scene_18_v2",
+      "base_id": "scene_18",
+      "category": "photo_studio",
+      "variation": "v2_object",
+      "text": "a black video camera, white backdrop, and silver tripod in a photo studio"
+    },
+    {
+      "id": "scene_18_v3",
+      "base_id": "scene_18",
+      "category": "photo_studio",
+      "variation": "v3_spatial",
+      "text": "a black camera on floor, white backdrop, and silver tripod in a photo studio"
+    },
+
+    {
+      "id": "scene_19_v0",
+      "base_id": "scene_19",
+      "category": "outer_space",
+      "variation": "v0_original",
+      "text": "a white astronaut, silver spacecraft, and red planet Mars in outer space"
+    },
+    {
+      "id": "scene_19_v1",
+      "base_id": "scene_19",
+      "category": "outer_space",
+      "variation": "v1_attribute",
+      "text": "an orange astronaut, silver spacecraft, and red planet Mars in outer space"
+    },
+    {
+      "id": "scene_19_v2",
+      "base_id": "scene_19",
+      "category": "outer_space",
+      "variation": "v2_object",
+      "text": "a white robot, silver spacecraft, and red planet Mars in outer space"
+    },
+    {
+      "id": "scene_19_v3",
+      "base_id": "scene_19",
+      "category": "outer_space",
+      "variation": "v3_spatial",
+      "text": "a white astronaut on Mars, silver spacecraft, and red planet Mars in outer space"
+    },
+
+    {
+      "id": "scene_20_v0",
+      "base_id": "scene_20",
+      "category": "fantasy",
+      "variation": "v0_original",
+      "text": "a purple dragon, golden castle, and silver knight in a fantasy land"
+    },
+    {
+      "id": "scene_20_v1",
+      "base_id": "scene_20",
+      "category": "fantasy",
+      "variation": "v1_attribute",
+      "text": "a blue dragon, golden castle, and silver knight in a fantasy land"
+    },
+    {
+      "id": "scene_20_v2",
+      "base_id": "scene_20",
+      "category": "fantasy",
+      "variation": "v2_object",
+      "text": "a purple phoenix, golden castle, and silver knight in a fantasy land"
+    },
+    {
+      "id": "scene_20_v3",
+      "base_id": "scene_20",
+      "category": "fantasy",
+      "variation": "v3_spatial",
+      "text": "a purple dragon inside castle, golden castle, and silver knight in a fantasy land"
+    }
+  ]
+}

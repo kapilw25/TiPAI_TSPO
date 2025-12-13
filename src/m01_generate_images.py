@@ -45,8 +45,12 @@ from diffusers import DiffusionPipeline, FluxPipeline
 # ============================================================================
 class Config:
     PROJECT_ROOT = Path(__file__).parent.parent
-    PROMPTS_PATH = PROJECT_ROOT / "data" / "prompts.json"
-    OUTPUT_DIR = PROJECT_ROOT / "outputs" / "m01_images"
+    # Prompts path set dynamically based on model
+    PROMPTS_SDXL = PROJECT_ROOT / "data" / "prompts_sdxl.json"
+    PROMPTS_FLUX = PROJECT_ROOT / "data" / "prompts.json"
+    # Output dirs per model (set dynamically)
+    OUTPUT_DIR_SDXL = PROJECT_ROOT / "outputs" / "m01_images_sdxl"
+    OUTPUT_DIR_FLUX = PROJECT_ROOT / "outputs" / "m01_images_flux"
     DB_PATH = PROJECT_ROOT / "outputs" / "centralized.db"
 
     SEED = 42  # Single seed for all variations
@@ -106,6 +110,7 @@ def init_database(db_path: Path) -> sqlite3.Connection:
             generation_prompt TEXT NOT NULL,
             prompt_category TEXT NOT NULL,
             seed INTEGER NOT NULL,
+            model TEXT NOT NULL,
             image_path TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -117,16 +122,16 @@ def init_database(db_path: Path) -> sqlite3.Connection:
 def save_image_record(conn: sqlite3.Connection, image_id: str, prompt_id: str,
                       base_id: str, variation: str, baseline_prompt: str,
                       generation_prompt: str, prompt_category: str,
-                      seed: int, image_path: str) -> None:
+                      seed: int, model: str, image_path: str) -> None:
     """Save image record to database."""
     cursor = conn.cursor()
     cursor.execute("""
         INSERT OR REPLACE INTO images
         (image_id, prompt_id, base_id, variation, baseline_prompt, generation_prompt,
-         prompt_category, seed, image_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         prompt_category, seed, model, image_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (image_id, prompt_id, base_id, variation, baseline_prompt, generation_prompt,
-          prompt_category, seed, image_path))
+          prompt_category, seed, model, image_path))
     conn.commit()
 
 
@@ -287,13 +292,13 @@ def add_text_overlay(image: Image.Image, baseline_prompt: str, generation_prompt
     return new_img
 
 
-def check_existing_images(config: Config, prompts: list) -> list:
+def check_existing_images(config: Config, prompts: list, output_dir: Path) -> list:
     """Check for existing images and return list of existing paths."""
     existing = []
     for prompt_data in prompts:
         prompt_id = prompt_data['id']
         image_id = f"{prompt_id}_seed{config.SEED}"
-        image_path = config.OUTPUT_DIR / f"{image_id}.png"
+        image_path = output_dir / f"{image_id}.png"
         if image_path.exists():
             existing.append(image_path)
     return existing
@@ -316,13 +321,13 @@ def prompt_user_for_action(existing_count: int, total_count: int) -> str:
         print("Invalid choice. Enter 1 or 2.")
 
 
-def delete_existing_images(config: Config, prompts: list) -> None:
+def delete_existing_images(config: Config, output_dir: Path) -> None:
     """Delete all existing images and clear DB records."""
     # Delete image files
-    if config.OUTPUT_DIR.exists():
-        for png in config.OUTPUT_DIR.glob("*.png"):
+    if output_dir.exists():
+        for png in output_dir.glob("*.png"):
             png.unlink()
-        print(f"Deleted all images from {config.OUTPUT_DIR}")
+        print(f"Deleted all images from {output_dir}")
 
     # Clear DB records
     if config.DB_PATH.exists():
@@ -336,8 +341,19 @@ def delete_existing_images(config: Config, prompts: list) -> None:
 
 def generate_all_images(config: Config) -> None:
     """Generate all images for all prompt variations."""
-    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    prompts, baseline_prompts = load_prompts(config.PROMPTS_PATH)
+    # Select prompts and output dir based on model
+    if config.active_model == "sdxl":
+        prompts_path = config.PROMPTS_SDXL
+        output_dir = config.OUTPUT_DIR_SDXL
+    else:
+        prompts_path = config.PROMPTS_FLUX
+        output_dir = config.OUTPUT_DIR_FLUX
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Using prompts: {prompts_path.name}")
+    print(f"Output dir: {output_dir}")
+
+    prompts, baseline_prompts = load_prompts(prompts_path)
 
     model_config = config.MODELS[config.active_model]
     print(f"Model: {config.active_model.upper()} ({model_config['model_id']})")
@@ -347,11 +363,11 @@ def generate_all_images(config: Config) -> None:
     print(f"Image size: {model_config['image_size']}x{model_config['image_size']}")
 
     # Check for existing images
-    existing = check_existing_images(config, prompts)
+    existing = check_existing_images(config, prompts, output_dir)
     if existing:
         choice = prompt_user_for_action(len(existing), len(prompts))
         if choice == '2':
-            delete_existing_images(config, prompts)
+            delete_existing_images(config, output_dir)
             print("Starting fresh generation...")
         else:
             print(f"Resuming... Will skip {len(existing)} existing images.")
@@ -371,13 +387,14 @@ def generate_all_images(config: Config) -> None:
         baseline_prompt = baseline_prompts.get(base_id, generation_prompt)
 
         image_id = f"{prompt_id}_seed{config.SEED}"
-        image_path = config.OUTPUT_DIR / f"{image_id}.png"
+        image_path = output_dir / f"{image_id}.png"
 
         if image_path.exists():
             # Still save to DB if not already there
             save_image_record(conn, image_id, prompt_id, base_id, variation,
                               baseline_prompt, generation_prompt, prompt_category,
-                              config.SEED, str(image_path.relative_to(config.PROJECT_ROOT)))
+                              config.SEED, config.active_model,
+                              str(image_path.relative_to(config.PROJECT_ROOT)))
             pbar.update(1)
             continue
 
@@ -392,12 +409,14 @@ def generate_all_images(config: Config) -> None:
         image_with_text.save(str(image_path))
         save_image_record(conn, image_id, prompt_id, base_id, variation,
                           baseline_prompt, generation_prompt, prompt_category,
-                          config.SEED, str(image_path.relative_to(config.PROJECT_ROOT)))
+                          config.SEED, config.active_model,
+                          str(image_path.relative_to(config.PROJECT_ROOT)))
         pbar.update(1)
 
     pbar.close()
     conn.close()
-    print(f"Done! Saved to {config.OUTPUT_DIR}")
+    print(f"Done! Saved to {output_dir}")
+    return output_dir  # Return for push_hf
 
 
 # ============================================================================
@@ -418,8 +437,8 @@ if __name__ == "__main__":
     print(f"TiPAI Image Generation")
     print(f"{'='*60}")
 
-    generate_all_images(config)
+    output_dir = generate_all_images(config)
 
     if args.push_hf:
         from utils.hf_utils import push_dataset_to_hf
-        push_dataset_to_hf(db_path=config.DB_PATH, images_dir=config.OUTPUT_DIR)
+        push_dataset_to_hf(db_path=config.DB_PATH, images_dir=output_dir)

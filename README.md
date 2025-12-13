@@ -11,21 +11,21 @@ python -m venv venv_tipai
 source venv_tipai/bin/activate
 pip install -r requirements.txt
 
-# 2. Generate images + push to HuggingFace (~2 hrs for 80 images)
-python src/m01_generate_images.py --push-hf
+# 2. Generate images (SDXL on A10-24GB, FLUX on A6000-48GB+)
+python -u src/m01_generate_images.py --model sdxl 2>&1 | tee logs/m01_sdxl_$(date +%Y%m%d_%H%M%S).log
+python -u src/m01_generate_images.py --model flux --push-hf 2>&1 | tee logs/m01_flux_$(date +%Y%m%d_%H%M%S).log
 
-# 3. Score with CLIP (~30 min)
-# Downloads from HF if not local
-python src/m02_clip_scoring.py
+# 3. Extract 3 signals (SAM + Grad-CAM + Gaps)
+python -u src/m02_extract_signals.py 2>&1 | tee logs/m02_$(date +%Y%m%d_%H%M%S).log
 
-# 4. Create heatmaps (~10 min)
-python src/m03_create_heatmaps.py
+# 4. Create risk maps (RED overlay on bad segments)
+python -u src/m03_create_risk_maps.py 2>&1 | tee logs/m03_$(date +%Y%m%d_%H%M%S).log
 
-# 5. Create pairs (~5 min)
-python src/m04_create_pairs.py
+# 5. Create pairs
+python -u src/m04_create_pairs.py 2>&1 | tee logs/m04_$(date +%Y%m%d_%H%M%S).log
 
 # 6. Launch demo
-python src/m05_demo_app.py --port 7860
+python src/m08_demo_app.py --port 7860
 ```
 
 ## HuggingFace Dataset

@@ -38,7 +38,9 @@ from utils.sam_utils import load_sam, get_top_segments, SegmentedObject
 class Config:
     PROJECT_ROOT = Path(__file__).parent.parent
     DB_PATH = PROJECT_ROOT / "outputs" / "centralized.db"
-    IMAGES_DIR = PROJECT_ROOT / "outputs" / "m01_images"
+    # Image dirs per model (checked for dataset availability)
+    IMAGES_DIR_SDXL = PROJECT_ROOT / "outputs" / "m01_images_sdxl"
+    IMAGES_DIR_FLUX = PROJECT_ROOT / "outputs" / "m01_images_flux"
     GRADCAM_DIR = PROJECT_ROOT / "outputs" / "m02_gradcam"
 
     # SAM settings
@@ -341,10 +343,12 @@ def extract_all_signals(image: Image.Image, prompt: str, image_id: str, config: 
 # ============================================================================
 def process_all_images(config: Config) -> None:
     """Extract signals for all images in database."""
-    # Ensure images exist
+    # Ensure images exist (check both model dirs)
     from utils.hf_utils import ensure_dataset_available
-    if not ensure_dataset_available(config.IMAGES_DIR):
-        print("ERROR: Could not get dataset locally or from HuggingFace.")
+    sdxl_ok = ensure_dataset_available(config.IMAGES_DIR_SDXL)
+    flux_ok = ensure_dataset_available(config.IMAGES_DIR_FLUX)
+    if not sdxl_ok and not flux_ok:
+        print("ERROR: No images found. Run m01 first or download from HuggingFace.")
         return
 
     config.GRADCAM_DIR.mkdir(parents=True, exist_ok=True)

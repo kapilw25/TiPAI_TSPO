@@ -32,8 +32,7 @@ from tqdm import tqdm
 class Config:
     PROJECT_ROOT = Path(__file__).parent.parent
     DB_PATH = PROJECT_ROOT / "outputs" / "centralized.db"
-    IMAGES_DIR = PROJECT_ROOT / "outputs" / "m01_images"
-    GRADCAM_DIR = PROJECT_ROOT / "outputs" / "m02_gradcam"
+    # Note: image_path comes from DB (model-specific dirs handled by m01)
     OUTPUT_DIR = PROJECT_ROOT / "outputs" / "m03_risk_maps"
 
     # Overlay config
