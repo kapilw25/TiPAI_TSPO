@@ -22,7 +22,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 from tqdm import tqdm
-from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
+from diffusers import DiffusionPipeline
 
 
 # ============================================================================
@@ -89,23 +89,27 @@ def load_prompts(prompts_path: Path) -> list:
     return data['prompts']
 
 
-def load_pipeline(model_id: str) -> StableDiffusionXLPipeline:
-    """Load Stable Diffusion pipeline on CUDA."""
+def load_pipeline(model_id: str) -> DiffusionPipeline:
+    """Load Stable Diffusion pipeline on CUDA (official SDXL usage)."""
     assert torch.cuda.is_available(), "CUDA required! No CPU/MPS fallback."
 
     print(f"Loading {model_id} on CUDA...")
-    pipe = StableDiffusionXLPipeline.from_pretrained(
+    pipe = DiffusionPipeline.from_pretrained(
         model_id,
         torch_dtype=torch.float16,
         use_safetensors=True,
         variant="fp16"
     )
-    pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
     pipe = pipe.to("cuda")
+
+    # Optional: 20-30% speedup with torch.compile (torch >= 2.0)
+    # Uncomment for faster generation (adds ~60s compile time on first run)
+    # pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
+
     return pipe
 
 
-def generate_image(pipe: StableDiffusionXLPipeline, prompt: str, seed: int, config: Config) -> Image.Image:
+def generate_image(pipe: DiffusionPipeline, prompt: str, seed: int, config: Config) -> Image.Image:
     """Generate a single image on CUDA."""
     generator = torch.Generator(device="cuda").manual_seed(seed)
     image = pipe(

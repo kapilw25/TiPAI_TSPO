@@ -66,6 +66,8 @@ TiPAI_TSPO/
 torch>=2.0.0
 transformers>=4.35.0
 diffusers>=0.24.0
+safetensors>=0.4.0
+invisible-watermark>=0.2.0
 open-clip-torch>=2.23.0
 gradio>=4.0.0
 Pillow>=10.0.0
@@ -73,6 +75,43 @@ numpy>=1.24.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 tqdm>=4.65.0
+```
+
+---
+
+## SDXL Model Choice (POC Tradeoff)
+
+**Reference**: https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│  SDXL Base Only vs Base + Refiner                                  │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Option A: Base Only (POC Choice)                                 │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  • vRAM: ~12-14GB                                           │  │
+│  │  • Speed: ~20s/image                                        │  │
+│  │  • Quality: Good enough for POC                             │  │
+│  │  • GPU: A10-24GB sufficient                                 │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  Option B: Base + Refiner (Paper Scale)                           │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  • vRAM: ~20-24GB                                           │  │
+│  │  • Speed: ~35s/image                                        │  │
+│  │  • Quality: Best (ensemble of experts)                      │  │
+│  │  • GPU: A100-40GB recommended                               │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  POC Decision: Option A                                           │
+│  Reasoning:                                                       │
+│  1. POC goal = demonstrate heatmaps, not max image quality       │
+│  2. Refiner doesn't change faithfulness concept                  │
+│  3. Saves cost → A10-24GB is cheaper than A100                   │
+│  4. Paper-scale can add refiner later                            │
+│                                                                    │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---

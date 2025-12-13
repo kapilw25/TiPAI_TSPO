@@ -122,6 +122,27 @@ NOT NSFW. This is the TIFA/VQAScore definition used by Google Imagen3, DALL-E 3 
 
 ---
 
+## SDXL Model Choice: Base Only vs Base + Refiner
+
+**Reference**: https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
+
+| Factor | Option A: Base Only | Option B: Base + Refiner |
+|--------|---------------------|--------------------------|
+| **vRAM** | ~12-14GB | ~20-24GB |
+| **Speed** | ~20s/image | ~35s/image |
+| **Quality** | Good enough for POC | Best quality |
+| **Complexity** | Simple | More code |
+
+**POC Decision: Option A (Base only)**
+
+Reasoning:
+1. POC goal = demonstrate patch-level heatmaps, not maximum image quality
+2. Refiner adds complexity without changing the faithfulness concept
+3. Saves vRAM → can use cheaper A10-24GB instance
+4. Paper-scale can add refiner later for quality improvement
+
+---
+
 ## Why This Dataset Design Wins
 
 | Factor | Value |
