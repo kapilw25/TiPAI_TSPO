@@ -2,7 +2,40 @@
 
 Tournament Inpainting for Patch-Level Alignment in Text-to-Image
 
+---
+
+## PROJECT STATUS: PAUSED (Legal/Ethical Concerns)
+
+### Why Paused
+
+The original research direction involved NSFW/nudity detection using datasets like NudeNet. During dataset exploration, we discovered:
+
+1. **CSAM Contamination**: In October 2025, the Canadian Centre for Child Protection (C3P) identified ~680 Child Sexual Abuse Material (CSAM) images within the NudeNet training dataset.
+
+2. **Legal Risks**: Researchers who downloaded the dataset faced:
+   - Permanent cloud account terminations (Google Drive, etc.)
+   - Automated CSAM scanner flags
+   - Potential legal consequences
+
+### References
+
+- [404 Media: AI Dataset for Detecting Nudity Contained Child Sexual Abuse Images](https://www.404media.co/ai-dataset-for-detecting-nudity-contained-child-sexual-abuse-images/)
+- Canadian Centre for Child Protection (C3P) report
+- Multiple accounts of Google account suspensions after dataset access
+
+### For Future Researchers
+
+1. **Avoid NSFW/nudity datasets entirely** - legal risks are too high
+2. **Consider safer categories**: violence detection, hate speech, toxicity
+3. **Use only pre-trained models** - never download training data for NSFW classifiers
+4. **Work on university infrastructure** with proper IRB approval
+5. **Consult legal counsel** before any content moderation research
+
+---
+
 ## Quick Start (GPU Instance)
+
+*Commands preserved for future use with non-NSFW safety categories*
 
 ```bash
 # 1. Setup

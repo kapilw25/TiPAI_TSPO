@@ -1,5 +1,82 @@
 # TiPAI-TSPO: Complete Research Roadmap
 
+## Implementation Strategy: Incremental Complexity
+
+### Options (Do B First, Then A if Needed)
+
+| Option | What to Do | Effort | Output |
+|--------|------------|--------|--------|
+| **C: Just Ship** | Notebook + random 5 picks + threshold | ~0 GPU hrs | Working product, no paper |
+| **B: Simplified** ⬅️ START HERE | Use HF scores + Train TSPO only | ~40 GPU hrs | Working system, Tier-2 paper |
+| **A: Full Professor** | Train Stage A scorer + TSPO + Calibration | ~170 GPU hrs | Tier-1 paper |
+
+### Why TSPO Over Other *PO Algorithms?
+
+| Algorithm | Preference Pairs? | Approach | Why TSPO is Better |
+|-----------|-------------------|----------|-------------------|
+| **PPO** | ❌ No (reward model) | Actor-critic RL | Needs critic, less stable |
+| **GRPO** | ❌ No (group relative) | Group comparison | No preference pairs |
+| **DPO** | ✅ Yes | **Pairwise** (2 items) | Only compares 2 items |
+| **TSPO** | ✅ Yes | **Listwise** (N=5 items) | Ranks all candidates + diversity + compute |
+
+**TSPO = DPO's preference pairs + Listwise ranking + Diversity/Compute regularizers**
+
+Like CITA beat DPO with instruction-conditioning + KL control,
+TSPO beats DPO with listwise ranking + diversity + compute efficiency.
+
+---
+
+### Phase 1: Option B (Simplified TiPAI-TSPO)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 1: SIMPLIFIED (Use HF Scores + Train TSPO Only)                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  FROZEN (from notebook):              TRAIN (only novelty):                 │
+│  ─────────────────────────            ─────────────────────                 │
+│  • NudeNet detection                  • TSPO Policy                         │
+│  • HF classifiers (scoring)             → Learn which CFG/seed/steps work   │
+│  • SD Inpainting                        → ~40 GPU hours                     │
+│  • Guards (just threshold)                                                  │
+│                                                                              │
+│  Pick best candidate using HF scores (no Stage A training!)                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Phase 2: Option A (Full Professor's Proposal) - OPTIONAL
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 2: FULL (Add Stage A Scorer) - Only if Phase 1 results insufficient  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ADD training:                        WHY:                                  │
+│  ─────────────                        ────                                  │
+│  • Stage A Scorer                     • Judge seam quality (HF can't)       │
+│    → Train on DETONATE pairs          • Judge faithfulness (HF can't)       │
+│    → ~20 GPU hours                    • Composite score for Tier-1 paper    │
+│                                                                              │
+│  • Calibration                        • Interpretable thresholds            │
+│    → Platt scaling                    • Mathematical guarantees             │
+│    → ~10 GPU hours                                                          │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Comparison: Phase 1 vs Phase 2
+
+| Aspect | Phase 1 (HF Scores) | Phase 2 (Trained Scorer) |
+|--------|---------------------|--------------------------|
+| Detects NSFW | ✅ Yes | ✅ Yes |
+| Judges seam quality | ❌ No | ✅ Yes |
+| Judges scene match | ❌ No | ✅ Yes |
+| GPU Hours | ~40 | ~170 |
+| Paper Target | Tier-2 | Tier-1 |
+
+---
+
 ## Research Focus: AI Safety (NSFW Detection + Censoring)
 
 | Aspect | Description |
@@ -8,6 +85,76 @@
 | **Method** | Patch-level detection + Tournament-based inpainting |
 | **Dataset** | T2ISafety (CVPR 2025) - 70K prompts, 68K annotated images |
 | **Baselines** | Safe Latent Diffusion, Erasing Concepts, NudeNet, etc. |
+
+---
+
+## Tier-1 Conference Requirements (CRITICAL)
+
+**Lesson from CITA**: To get accepted at Tier-1 venues (NeurIPS, CVPR, ICCV), we must show:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    TIER-1 ACCEPTANCE REQUIREMENTS                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  WHAT CITA DID (Tier-1 Standard):                                           │
+│  ────────────────────────────────                                           │
+│  1. TRAINED all baselines (DPO, GRPO, PPO) from same checkpoint             │
+│  2. Showed training curves for ALL methods (not just CITA)                  │
+│  3. Demonstrated CITA's margin grew HIGHER during training                  │
+│  4. Final evaluation showed CITA >> others (86.7% vs 56.1%)                │
+│                                                                              │
+│  WHAT TiPAI-TSPO MUST DO (Same Standard):                                   │
+│  ────────────────────────────────────────                                   │
+│  1. TRAIN all baselines from same checkpoint (NOT frozen)                   │
+│  2. Show training curves for ALL methods                                    │
+│  3. Demonstrate TiPAI-TSPO margin grows HIGHER during training              │
+│  4. Final evaluation shows TiPAI-TSPO >> others                             │
+│                                                                              │
+│  ✗ INSUFFICIENT: Compare against frozen NudeNet only                        │
+│  ✓ REQUIRED: Train Safe LD, Erasing Concepts, etc. and compare curves       │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Training Dynamics Comparison (Like CITA)
+
+```
+Safety Margin (during training)
+│
+│      ──────────────────────  TiPAI-TSPO (should be HIGHEST)
+│  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   Safe Latent Diffusion (trained)
+│  · · · · · · · · · · · · ·   Erasing Concepts (trained)
+│  - - - - - - - - - - - - -   Forget-Me-Not (trained)
+│
+│────────────────────────────────────────────► Training Steps
+     0    1K   2K   3K   4K   5K
+
+KEY: All baselines TRAINED, all have training curves, TiPAI-TSPO wins
+```
+
+### Baselines: TRAINED vs FROZEN
+
+| Baseline | Status | Training Required | Notes |
+|----------|--------|-------------------|-------|
+| **Safe Latent Diffusion** | MUST TRAIN | Yes | Concept suppression loss |
+| **Erasing Concepts** | MUST TRAIN | Yes | Fine-tuning erasure |
+| **Forget-Me-Not** | MUST TRAIN | Yes | Attention resteering |
+| **SAFREE** | FROZEN (OK) | No | Training-free by design |
+| **NudeNet + Inpaint** | FROZEN (reference) | No | Inference-only baseline |
+| **TiPAI-TSPO (ours)** | MUST TRAIN | Yes | Our method |
+
+**Note**: SAFREE and NudeNet are frozen by design, but we still need 3+ trained baselines for fair comparison.
+
+### Scope Impact
+
+| Aspect | Original Plan | Tier-1 Requirement |
+|--------|--------------|-------------------|
+| Baselines trained | 0 (all frozen) | 3+ TRAINED |
+| Training curves shown | TiPAI-TSPO only | ALL methods |
+| Evaluation type | Final scores only | Training dynamics + Final |
+| Estimated time | 6-8 weeks | 12-16 weeks |
+| GPU hours | ~100 | ~400 |
 
 ---
 
@@ -41,26 +188,174 @@
 
 ---
 
-## What is TiPAI-TSPO?
+## Building TiPAI-TSPO on NudeNet Notebook (Layman Explanation)
 
-**Layman Explanation**: A content moderator for AI images
+### What the Notebook Does (Current - Works!)
 
 ```
-WITHOUT TiPAI-TSPO:                    WITH TiPAI-TSPO:
-
-AI generates: [Nude image]             AI generates: [Nude image]
-                                                │
-Platform shows: [Nude image] ✗                  ▼
-                                       TiPAI detects: "NSFW regions here!"
-                                                │
-                                                ▼
-                                       TiPAI censors: [Clothed image] ✓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  NOTEBOOK PIPELINE (Simple Chef)                                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Step 1: NudeNet looks at image                                             │
+│          → "I see exposed breast at (x=100, y=200)"                         │
+│          → Outputs: bounding boxes                                          │
+│                                                                              │
+│  Step 2: HF Classifiers double-check                                        │
+│          → "Yes, this image is 85% NSFW"                                    │
+│          → Confirms NudeNet's detection                                     │
+│                                                                              │
+│  Step 3: Generate ONE mask (white region to cover)                          │
+│          → Dilate the boxes a bit                                           │
+│                                                                              │
+│  Step 4: SD Inpainting fills in mask                                        │
+│          → "Put modest clothing here"                                       │
+│          → Outputs: ONE censored image                                      │
+│                                                                              │
+│  DONE. Take what you get.                                                   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Real-world analogy**: Like YouTube's content moderation, but for images
-- **Stage A (Auditor)**: "Is this image safe? Where are the bad parts?"
-- **Stage B (Painter)**: "Let me cover/replace those bad regions"
-- **Stage C (Calibration)**: "Am I confident enough to show the fixed version?"
+**Analogy**: Like a chef who makes ONE dish and serves it. No choice, no quality check.
+
+---
+
+### What Professor's Proposal ADDS (Three Stages)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PROFESSOR'S TiPAI-TSPO (Smart Restaurant)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  KEEP: NudeNet + HF Classifiers (detection) ← FROZEN, don't touch           │
+│                                                                              │
+│  ADD Stage A: "Food Critic" (Auditor-Scorer)                                │
+│  ─────────────────────────────────────────────                              │
+│  Instead of just "is it NSFW?", ask "HOW safe is it? (0-100)"               │
+│                                                                              │
+│  • Input: Any image                                                         │
+│  • Output: Safety SCORE (e.g., "this image is 23% safe")                    │
+│  • Also: WHERE is it unsafe? (risk heatmap)                                 │
+│                                                                              │
+│  Training: Show 100K pairs of (unsafe, safe) images                         │
+│            → Learn "safe image should score HIGHER than unsafe"             │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ADD Stage B: "5 Chefs Competition" (Tournament + TSPO)                     │
+│  ─────────────────────────────────────────────────────────                  │
+│                                                                              │
+│  B1: Train SD Inpainter to be timestep-aware                                │
+│      (different settings for different situations)                          │
+│                                                                              │
+│  B2: TOURNAMENT - Instead of 1 output, make 5 different ones:               │
+│      ┌───────────────────────────────────────────────────────┐              │
+│      │  Chef 1: CFG=7, seed=123   → Candidate 1 (score: 72)  │              │
+│      │  Chef 2: CFG=9, seed=456   → Candidate 2 (score: 85)  │ ← WINNER!   │
+│      │  Chef 3: CFG=11, seed=789  → Candidate 3 (score: 68)  │              │
+│      │  Chef 4: CFG=5, seed=111   → Candidate 4 (score: 55)  │              │
+│      │  Chef 5: Do nothing        → Control C_0 (score: 20)  │              │
+│      └───────────────────────────────────────────────────────┘              │
+│                                                                              │
+│      Use Stage A's scorer to rate each candidate!                           │
+│      Pick the one with HIGHEST safety score!                                │
+│                                                                              │
+│  B3: GUARDS - Only accept winner if it's CLEARLY better than doing nothing  │
+│      → If Score(winner) - Score(control) < threshold, keep original         │
+│      → Prevents bad edits from making things WORSE                          │
+│                                                                              │
+│  B4: TSPO Policy - Learn WHICH settings (knobs) work best                   │
+│      → "For this type of image, CFG=9 usually wins"                         │
+│      → Reduces the 5 tries needed over time                                 │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ADD Stage C: "Quality Control Manager" (Calibration)                       │
+│  ────────────────────────────────────────────────────                       │
+│                                                                              │
+│  Tune the thresholds so decisions are RELIABLE:                             │
+│  • δ (delta): "How much better must winner be?" (e.g., +10 points)          │
+│  • τ_P: "Minimum safety score to accept" (e.g., must be > 70%)              │
+│  • τ_F: "Minimum faithfulness" (don't change the image too much)            │
+│                                                                              │
+│  Like a manager who says: "Only serve the dish if it scores > 80            │
+│  AND it's at least 10 points better than the original"                      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Side-by-Side Comparison
+
+| Aspect | Notebook (Current) | TiPAI-TSPO (Professor's) |
+|--------|-------------------|--------------------------|
+| **Detection** | NudeNet + HF ✓ | Same (FROZEN) |
+| **Scoring** | Binary (NSFW/safe) | Continuous (0-100) |
+| **Inpaint outputs** | 1 | 5 (tournament) |
+| **Quality control** | None (take what you get) | Guards (reject bad edits) |
+| **Learning** | None (all frozen) | Stage A Scorer + TSPO Policy |
+
+---
+
+### Visual Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│  INPUT IMAGE (NSFW)                                                         │
+│        │                                                                     │
+│        ▼                                                                     │
+│  ┌──────────────────────────────────────────┐                               │
+│  │  NudeNet + HF (FROZEN from notebook)     │                               │
+│  │  "Breast detected at (100, 200)"         │                               │
+│  └──────────────────────┬───────────────────┘                               │
+│                         │                                                    │
+│                         ▼                                                    │
+│  ┌──────────────────────────────────────────┐                               │
+│  │  Stage A: Scorer (NEW - TRAINED)         │                               │
+│  │  "Original image safety = 20/100"        │                               │
+│  │  "Risk map shows problem at breast area" │                               │
+│  └──────────────────────┬───────────────────┘                               │
+│                         │                                                    │
+│                         ▼                                                    │
+│  ┌──────────────────────────────────────────┐                               │
+│  │  Stage B: Tournament (NEW)               │                               │
+│  │                                          │                               │
+│  │  SD Inpaint x 5 different settings:      │                               │
+│  │  C1=72, C2=85✓, C3=68, C4=55, C0=20     │                               │
+│  │                                          │                               │
+│  │  Winner: C2 (score 85)                   │                               │
+│  │  Margin: 85-20 = 65 > δ=10 ✓            │                               │
+│  └──────────────────────┬───────────────────┘                               │
+│                         │                                                    │
+│                         ▼                                                    │
+│  ┌──────────────────────────────────────────┐                               │
+│  │  Stage C: Calibration (NEW)              │                               │
+│  │  "Score 85 > threshold 70? ✓"            │                               │
+│  │  "Margin 65 > required 10? ✓"            │                               │
+│  │  → ACCEPT edit, output C2                │                               │
+│  └──────────────────────────────────────────┘                               │
+│                         │                                                    │
+│                         ▼                                                    │
+│  OUTPUT: Best censored image (C2)                                           │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### TL;DR
+
+| What | Analogy |
+|------|---------|
+| **Notebook** | Chef makes 1 dish, you eat it |
+| **Stage A** | Hire a food critic to score dishes |
+| **Stage B** | Make 5 chefs compete, pick winner |
+| **Stage C** | Manager sets quality standards |
+
+**Professor's proposal = Notebook + Quality Control System**
 
 ---
 
@@ -130,199 +425,62 @@ Platform shows: [Nude image] ✗                  ▼
 
 ---
 
-## System Overview
+## CRITICAL INSIGHT: Build ON TOP of NudeNet, Don't Replace It
+
+### Problem with Current src/ Code
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        TiPAI-TSPO SAFETY SYSTEM                              │
+│  CURRENT CODE IS FOR FAITHFULNESS, NOT SAFETY!                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│                    +-------------------+                                     │
-│                    |   INPUT IMAGE     |                                     │
-│                    | (potentially NSFW)|                                     │
-│                    +---------+---------+                                     │
-│                              │                                               │
-│                              v                                               │
-│         +--------------------+--------------------+                          │
-│         |                                         |                          │
-│         v                                         v                          │
-│  +------------------+                     +------------------+               │
-│  |   Stage A        |                     |   Stage B        |               │
-│  |   SAFETY JUDGE   |                     |   CENSOR/RECOVER |               │
-│  |                  |                     |                  |               │
-│  | "Is this NSFW?"  |<------------------->| "Cover this area"|               │
-│  | "Where is bad?"  |      scores         | "Try these knobs"|               │
-│  +--------+---------+                     +--------+---------+               │
-│           |                                        |                          │
-│           |         +------------------+           |                          │
-│           +-------->|   Stage C        |<----------+                          │
-│                     |   CALIBRATION    |                                     │
-│                     |                  |                                     │
-│                     | "Trust scores?"  |                                     │
-│                     | "Accept edit?"   |                                     │
-│                     +--------+---------+                                     │
-│                              |                                               │
-│                              v                                               │
-│                     +------------------+                                     │
-│                     |   SAFE IMAGE     |                                     │
-│                     | (NSFW removed)   |                                     │
-│                     +------------------+                                     │
+│  src/m01_generate_images.py  ─┐                                             │
+│  src/m02_extract_signals.py   ├── Detects "red car vs purple car"           │
+│  src/m03_create_risk_maps.py ─┘   NOT nude regions!                         │
+│                                                                              │
+│  Risk map output (scene_01_v1_seed42_risk_map.png):                         │
+│  • Highlights color change (red → purple)                                   │
+│  • Wrong object outlines                                                    │
+│  • USELESS for NSFW detection                                               │
+│                                                                              │
+│  Meanwhile, NudeNet + Inpaint (POC notebook):                               │
+│  • Detects nude regions PERFECTLY                                           │
+│  • SD Inpainting covers them WELL                                           │
+│  • Already working!                                                         │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Code to DELETE
 
-## Gap Analysis: POC vs Full TiPAI-TSPO
-
-### What's BUILT (in notebook)
-
-| Component | Notebook Implementation | TiPAI Equivalent |
-|-----------|-------------------------|------------------|
-| Detection | NudeNet + HF ensemble | Part of Stage A |
-| Mask Generation | `generate_mask()` | Region mining |
-| Inpainting | SD-Inpainting | Part of Stage B (Ag) |
-| Visualization | matplotlib 5-panel | Risk heatmap display |
-
-### What's MISSING
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    NOTEBOOK vs TiPAI-TSPO ROADMAP                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  NOTEBOOK (Current)              TiPAI-TSPO (Full System)                   │
-│  ──────────────────              ────────────────────────                   │
-│                                                                              │
-│  ✓ NudeNet Detection             Stage A: Safety Auditor (As)               │
-│  ✓ HF Ensemble (0.7 threshold)   ├─ ✗ Global Safety Score S (0-1)           │
-│  ✓ Binary Mask                   ├─ ✗ Patch Safety Scores S_R               │
-│  ✓ SD Inpainting (1 output)      ├─ ✗ Risk Heatmap r (learned, not rule)    │
-│                                  └─ ✗ L_pair + L_patch + L_safety           │
-│                                                                              │
-│                                  Stage B: Censor/Inpaint + TSPO             │
-│                                  ├─ ✗ N=5 Candidate Generation              │
-│                                  ├─ ✗ Tournament Selection                  │
-│                                  ├─ ✗ Control Baseline C_0                  │
-│                                  ├─ ✗ TSPO Policy (knob selection)          │
-│                                  └─ ✗ Guards (margin-based acceptance)      │
-│                                                                              │
-│                                  Stage C: Calibration                       │
-│                                  ├─ ✗ Platt Scaling                         │
-│                                  ├─ ✗ Operating Point Selection             │
-│                                  └─ ✗ Seamless Blending                     │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```bash
+# These files are for FAITHFULNESS, not SAFETY - DELETE or ARCHIVE
+src/m01_generate_images.py      # Generates faithful/unfaithful pairs
+src/m02_extract_signals.py      # Extracts CLIP signals (not NSFW)
+src/m03_create_risk_maps.py     # Creates risk maps for color changes
+src/m04_create_pairs.py         # Creates pairs for faithfulness
+utilities/signals.py            # CLIP-based signals (not NudeNet)
 ```
 
-### Detailed TODO List
+### Code to BUILD (Phase 1 - Simplified)
 
-| Stage | Component | Status | What to Build | Dataset Needed |
-|-------|-----------|--------|---------------|----------------|
-| **A1** | Global Safety Scorer | ❌ | Train model to output S ∈ [0,1] | T2ISafety |
-| **A2** | Patch Safety Scorer | ❌ | Per-patch safety S_R | T2ISafety |
-| **A3** | Risk Heatmap | ❌ | Learned heatmap (not rule-based) | T2ISafety |
-| **A4** | Training Losses | ❌ | L_pair + L_patch + L_safety | T2ISafety |
-| **B1** | Multi-Candidate | ❌ | Generate N=5 inpaint options | - |
-| **B2** | Tournament | ❌ | Score & rank candidates | Uses A |
-| **B3** | Control Baseline | ❌ | C_0 = do nothing option | - |
-| **B4** | TSPO Policy | ❌ | Learn knob selection | RL training |
-| **B5** | Guards | ❌ | Margin-based acceptance | Calibration |
-| **C1** | Calibration | ❌ | Platt scaling for scores | Validation set |
-| **C2** | Thresholds | ❌ | tau_safety(t), delta, seam | Tuning |
-
----
-
-## Three Training Stages
-
-### Stage A: Safety Auditor (As)
-
-```
-Goal: Train a SAFETY JUDGE that can:
-  1. Score whole images for safety (S)
-  2. Score individual patches for safety (S_R)
-  3. Generate safety risk heatmaps (r)
-
-+-------------------+     +-------------------+
-|      Image        | --> |   Safety Auditor  |
-|                   |     |       (As)        |
-+-------------------+     +---------+---------+
-                                   |
-                   +---------------+---------------+
-                   |               |               |
-                   v               v               v
-             +---------+     +---------+     +---------+
-             | Global  |     |  Patch  |     |  Risk   |
-             | Safety  |     | Safety  |     | Heatmap |
-             | Score S |     | Scores  |     |  r      |
-             | (0-1)   |     | S_R     |     |         |
-             +---------+     +---------+     +---------+
-
-Training: T2ISafety dataset (68K annotated images)
-Losses: L_pair + L_patch + L_safety
+```bash
+# Phase 1: Use HF scores + Train TSPO only
+src/m01_nsfw_detection.py       # Wrapper around NudeNet + HF ensemble (FROZEN)
+src/m02_multi_candidate.py      # Generate N=5 inpaint candidates
+src/m03_hf_scorer.py            # Use HF classifiers to score (NO TRAINING)
+src/m04_tournament.py           # Pick best candidate based on HF scores
+src/m05_guards.py               # Accept/reject logic (threshold, NO TRAINING)
+src/m06_tspo_policy.py          # TRAIN: Learn which settings work (ONLY TRAINING!)
+src/m07_inference.py            # Full pipeline
 ```
 
-### Stage B: Censor/Inpaint (Ag) + TSPO
+### Code to BUILD (Phase 2 - Full) - OPTIONAL
 
-```
-Goal: Train a CENSOR that can fix unsafe regions + COACH that picks settings
-
-B1: Pretrain Ag (Censor)
-    - Input: image with masked unsafe region + noise
-    - Output: safe content (clothing, blur, etc.)
-
-B2: Tournament (Competition)
-    - Generate N=5 candidate fixes
-    - Include control (do nothing) as C_0
-    - Score all with Stage A
-    - Accept only if CLEARLY safer (guards)
-
-B3: TSPO (Coach)
-    - Learn which "knobs" work best
-    - Knobs: mask dilation, CFG, noise, inversion depth
-    - Reward actions that lead to safest outputs
-
-+-------------------+     +-------------------+     +-------------------+
-|   Unsafe Region   | --> |   TSPO Policy     | --> |   N Candidates    |
-|   (R, mask m)     |     |   (pick knobs)    |     |   C_1 ... C_N     |
-+-------------------+     +-------------------+     +---------+---------+
-                                                             |
-                                                             v
-                                                   +-------------------+
-                         +-------------------------|   Tournament      |
-                         |                         |   + Guards        |
-                         v                         +-------------------+
-                   +-----------+                             |
-                   |  Winner?  |<----------------------------+
-                   +-----------+
-                         |
-             +-----------+-----------+
-             |                       |
-             v                       v
-       +-----------+           +-----------+
-       |  Accept   |           |   Keep    |
-       |  & Blend  |           |  Control  |
-       +-----------+           +-----------+
-```
-
-### Stage C: Calibration & Deployment
-
-```
-Goal: Tune decision rules for reliable safety operation
-
-1. Calibrate Scores
-   - Raw safety scores --> probabilities
-   - Methods: Platt scaling, Isotonic regression
-
-2. Choose Operating Points
-   - delta: margin required to beat control
-   - tau_safety(t): safety threshold
-   - seam_threshold: max boundary artifact
-
-3. Deploy
-   - Full inference algorithm
-   - Per-patch, per-step decisions
-   - Seamless latent blending
+```bash
+# Phase 2: Add Stage A Scorer training (only if Phase 1 insufficient)
+src/m03_stage_a_scorer.py       # TRAIN: Score safety + seam + faithfulness
+src/m08_calibration.py          # Platt scaling for thresholds
 ```
 
 ---
@@ -467,21 +625,54 @@ Our prior work **CITA** demonstrated instruction-conditioned alignment for LLMs.
 
 ---
 
-### Baselines to Compare (Safety-Focused)
+### Baselines to Compare (Safety-Focused) - TIER-1 COMPLIANT
 
-| Method | Paper | Approach | Patch-Aware | Tournament | Post-hoc Fix |
-|--------|-------|----------|-------------|------------|--------------|
-| SD 3.5 vanilla | - | None | No | No | No |
-| **Safe Latent Diffusion** | CVPR 2023 | Concept suppression | No | No | No |
-| **Erasing Concepts** | ICCV 2023 | Fine-tuning erasure | No | No | No |
-| **NudeNet + Inpaint** | - | Detection + inpaint | Yes | No | Yes |
-| **SAFREE** | arXiv 2024 | Training-free | No | No | No |
-| **Forget-Me-Not** | CVPR 2024 | Attention resteering | No | No | No |
-| **TiPAI-TSPO (ours)** | - | Patch + Tournament | **Yes** | **Yes** | **Yes** |
+**CRITICAL**: For Tier-1, we must TRAIN competing methods and compare training curves.
+
+| Method | Paper | Approach | TRAIN? | Training Curve? |
+|--------|-------|----------|--------|-----------------|
+| SD 3.5 vanilla | - | None | ❌ No | N/A |
+| **Safe Latent Diffusion** | CVPR 2023 | Concept suppression | ✅ **YES** | ✅ **REQUIRED** |
+| **Erasing Concepts** | ICCV 2023 | Fine-tuning erasure | ✅ **YES** | ✅ **REQUIRED** |
+| **Forget-Me-Not** | CVPR 2024 | Attention resteering | ✅ **YES** | ✅ **REQUIRED** |
+| **NudeNet + Inpaint** | - | Detection + inpaint | ❌ Frozen | N/A (reference) |
+| **SAFREE** | arXiv 2024 | Training-free | ❌ Frozen | N/A (by design) |
+| **TiPAI-TSPO (ours)** | - | Patch + Tournament | ✅ **YES** | ✅ **REQUIRED** |
+
+**Feature Comparison:**
+
+| Method | Patch-Aware | Tournament | Post-hoc Fix | Guards |
+|--------|-------------|------------|--------------|--------|
+| Safe Latent Diffusion | No | No | No | No |
+| Erasing Concepts | No | No | No | No |
+| Forget-Me-Not | No | No | No | No |
+| NudeNet + Inpaint | Yes | No | Yes | No |
+| SAFREE | No | No | No | No |
+| **TiPAI-TSPO (ours)** | **Yes** | **Yes** | **Yes** | **Yes** |
 
 ---
 
-### Evaluation Benchmarks (5 Axes - Safety Focused)
+### Primary Evaluation Metric: Mitigation Rate
+
+| Metric | What it Measures | Industry Standard? |
+|--------|------------------|-------------------|
+| **Mitigation Rate / Erasure Proportion** | % NSFW successfully removed | ✅ Yes ([arXiv benchmark](https://arxiv.org/html/2502.12527v1)) |
+| **Nudity Removal Rate (NRR)** | Reduction in exposed body parts | ✅ Yes |
+
+**Focus on Mitigation Rate** - this is the primary metric for Phase 1.
+
+### Why TSPO Beats DPO (Both Use Preference Pairs)
+
+| Feature | DPO | TSPO | Why TSPO Wins |
+|---------|-----|------|---------------|
+| Comparison | Pairwise (2 items) | **Listwise (N=5 items)** | Ranks all candidates, not just 2 |
+| Diversity | ❌ Not considered | ✅ **Diversity regularizer** | Encourages varied candidates |
+| Compute | ❌ Not considered | ✅ **Compute regularizer** | Learns to use fewer tries |
+| Tournament | ❌ | ✅ | Picks best from N candidates |
+
+**Research evidence:** [ADPO](https://arxiv.org/html/2510.18913) shows listwise beats pairwise by 12-93%.
+
+### Secondary Metrics (Optional)
 
 | Axis | Benchmark | What it Measures | Metric |
 |------|-----------|------------------|--------|
@@ -489,7 +680,6 @@ Our prior work **CITA** demonstrated instruction-conditioned alignment for LLMs.
 | **M₂** | T2ISafety (Violence) | Violence detection | Precision/Recall/F1 |
 | **M₃** | Patch IoU | Localization accuracy | IoU with ground truth |
 | **M₄** | Censoring Quality (FID) | Image quality after censoring | Lower is better |
-| **M₅** | Mitigation Rate | % NSFW successfully censored | Higher is better |
 
 ---
 
@@ -608,20 +798,43 @@ Success criteria:
 
 ---
 
-### Implementation Checklist
+### Implementation Checklist (TIER-1 COMPLIANT)
 
+**Phase 0: Dataset Preparation**
 | Task | Status | Notes |
 |------|--------|-------|
 | Download T2ISafety dataset | ❌ | Use university compute |
-| Implement Safe Latent Diffusion baseline | ❌ | From CVPR 2023 paper |
-| Implement Erasing Concepts baseline | ❌ | From ICCV 2023 paper |
-| Implement NudeNet + Inpaint baseline | ✓ | POC notebook |
-| Train Stage A Safety Scorer | ❌ | ViT-based on T2ISafety |
-| Add multi-candidate generation | ❌ | Tournament input |
-| Implement tournament selection | ❌ | Better output |
-| Compute Patch IoU | ❌ | Custom metric (ours) |
-| Compute FID | ❌ | Standard metric |
+| Create training pairs (unsafe, safe) | ❌ | For all methods |
+
+**Phase 1: Train ALL Baselines (TIER-1 REQUIREMENT)**
+| Task | Status | Notes | GPU Hours |
+|------|--------|-------|-----------|
+| Train Safe Latent Diffusion | ❌ | CVPR 2023 loss function | ~30 |
+| Train Erasing Concepts | ❌ | ICCV 2023 fine-tuning | ~30 |
+| Train Forget-Me-Not | ❌ | CVPR 2024 attention | ~30 |
+| Train TiPAI-TSPO Stage A | ❌ | Our method | ~20 |
+| Train TiPAI-TSPO Stage B | ❌ | Our method | ~40 |
+
+**Phase 2: Training Curves (TIER-1 REQUIREMENT)**
+| Task | Status | Notes |
+|------|--------|-------|
+| Log Safety Margin during training (ALL methods) | ❌ | TensorBoard |
+| Log Eval Loss during training (ALL methods) | ❌ | TensorBoard |
+| Generate comparison plots (like CITA) | ❌ | matplotlib |
+
+**Phase 3: Final Evaluation**
+| Task | Status | Notes |
+|------|--------|-------|
+| Implement NudeNet + Inpaint baseline | ✓ | POC notebook (frozen) |
+| Implement SAFREE baseline | ❌ | Training-free (frozen) |
+| Compute Sexual Detection (M₁) | ❌ | All methods |
+| Compute Violence Detection (M₂) | ❌ | All methods |
+| Compute Patch IoU (M₃) | ❌ | Our unique metric |
+| Compute FID (M₄) | ❌ | Standard metric |
+| Compute Mitigation Rate (M₅) | ❌ | All methods |
 | Generate radar chart | ❌ | matplotlib |
+
+**Total Estimated GPU Hours**: ~150-200 (A100)
 
 ---
 
@@ -647,43 +860,71 @@ Success criteria:
 
 ---
 
-## Research Phases
+## Research Phases (INCREMENTAL APPROACH)
 
-| Phase | Task | Output |
-|-------|------|--------|
-| **Phase 1** | Download T2ISafety, create pairs | Dataset ready |
-| **Phase 2** | Train Stage A Safety Scorer | Auditor model |
-| **Phase 3** | Implement Tournament + TSPO | Censor system |
-| **Phase 4** | Stage C Calibration | Tuned system |
-| **Phase 5** | Evaluation vs baselines | Benchmarks + radar |
-| **Phase 6** | Paper Writing | NeurIPS/CVPR draft |
+### PHASE 1: Simplified TiPAI-TSPO (~40 GPU hrs) ⬅️ START HERE
 
----
+| Step | Task | Output | GPU Hours |
+|------|------|--------|-----------|
+| 1.1 | Setup notebook as base (NudeNet + HF + SD Inpaint) | Working pipeline | 0 |
+| 1.2 | Add multi-candidate generation (N=5) | 5 candidates per image | 0 |
+| 1.3 | Add tournament (pick best by HF score) | Best candidate selection | 0 |
+| 1.4 | Add guards (threshold-based, no training) | Accept/reject logic | 0 |
+| 1.5 | **Train TSPO policy** (ONLY TRAINING) | Learn best settings | ~40 |
+| 1.6 | Evaluate vs NudeNet+Inpaint baseline | Comparison results | ~5 |
 
-## Deliverables
-
-| Phase | Output | Location |
-|-------|--------|----------|
-| 1 | T2ISafety processed pairs | Local/University |
-| 2-4 | Trained models (As, Ag, TSPO) | HuggingFace |
-| 5 | Evaluation scripts + results | GitHub |
-| 6 | Paper draft | Overleaf |
+**Phase 1 Total**: ~45 GPU hours → Working system, possible Tier-2 paper
 
 ---
 
-## Key Claim
+### PHASE 2: Full Professor's Proposal (~130 GPU hrs) - OPTIONAL
 
-> TiPAI-TSPO achieves **patch-level NSFW detection and censoring** with **tournament-based optimization**, outperforming Safe Latent Diffusion on detection accuracy while providing explicit localization that existing methods lack.
+| Step | Task | Output | GPU Hours |
+|------|------|--------|-----------|
+| 2.1 | Train Stage A Scorer (seam + faithfulness) | Trained scorer | ~20 |
+| 2.2 | Train ALL baselines (Safe LD, Erasing, Forget-Me-Not) | 3 trained baselines | ~90 |
+| 2.3 | Add Calibration (Platt scaling) | Interpretable thresholds | ~10 |
+| 2.4 | Generate Training Curves (ALL methods) | Plots like CITA | 0 |
+| 2.5 | Final Evaluation vs trained baselines | Benchmarks + radar | ~10 |
+
+**Phase 2 Total**: ~130 GPU hours → Tier-1 paper
 
 ---
 
-## Quick Reference: What Each Component Does
+### Decision Point After Phase 1
 
-| Component | Layman Analogy | Input | Output |
-|-----------|----------------|-------|--------|
-| **As (Safety Scorer)** | Content moderator | Image | Safety score + risk heatmap |
-| **Ag (Censor)** | Photo editor | Masked NSFW region | Safe replacement |
-| **TSPO (Policy)** | Settings optimizer | Scene info | Best knob settings |
-| **Tournament** | Best-of-N selection | N candidates | Safest output |
-| **Guards** | Quality control | Scores | Accept/Reject |
-| **Calibration** | Confidence tuning | Raw scores | Probabilities |
+```
+IF Phase 1 results are good enough (e.g., 80%+ mitigation rate):
+  → Submit to Tier-2 venue OR
+  → Skip to Phase 2 for Tier-1
+
+IF Phase 1 results show seam/faithfulness issues:
+  → Phase 2 is needed (train Stage A scorer)
+```
+
+**Combined Total**: ~175 GPU hours (A100)
+
+---
+
+## Key Claims
+
+### Phase 1 Claim (Simplified - Tier-2)
+
+> TiPAI-TSPO uses **tournament-based inpainting** with **TSPO policy optimization** to select the best censoring candidate from N=5 options, outperforming single-output NudeNet+Inpaint baseline on NSFW mitigation rate.
+
+**Phase 1 Evidence:**
+1. TSPO learns better settings than random (ablation)
+2. Tournament (N=5) beats single output (N=1)
+3. Mitigation rate improvement over baseline
+
+---
+
+### Phase 2 Claim (Full - Tier-1) - OPTIONAL
+
+> TiPAI-TSPO achieves **patch-level NSFW detection and censoring** with **tournament-based optimization** and **trained composite scorer**, demonstrating **superior training dynamics** and **better final performance** on safety, seam quality, and faithfulness compared to Safe Latent Diffusion, Erasing Concepts, and Forget-Me-Not.
+
+**Phase 2 Evidence Required:**
+1. Training curves showing TiPAI-TSPO's margin > all baselines
+2. Final evaluation showing TiPAI-TSPO >> others on 5 axes
+3. Ablation studies on Tournament, Guards, TSPO, Stage A Scorer
+

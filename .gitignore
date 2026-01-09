@@ -39,6 +39,11 @@ test_output
 
 *unsloth_compiled_cache
 
+# Dataset
+outputs/m05_t2isafety/
+literature/trial_NudeNet_Inpainter/
+git_push.sh
+
 
 # unsloth_2_Hybrid_Grit
 
